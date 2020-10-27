@@ -127,3 +127,11 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# vscode
+.vscode
+.vscode/
+
+# ignoring Data becuase it's large and unprocessed
+Data/220415
+Data/processed/old
