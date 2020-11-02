@@ -531,26 +531,18 @@ class wrappedNewton(pints.ForwardModel):
         omega = -6.47083954113886932e+01
         return [gamma, gamma1, gamma2, gamma3, omega]
 
-    def Adamson_capacitance_params(self):
-        """Returns a list with suggestsed capacitance parameters for the model with dimension
-        return: [gamma0, gamma1, gamma2, gamma3, omega]
+    def get_non_dimensionality_constants(self):
+        """ Helper function to obtain the non dimensionality constants from the base Python class
+
+        Returns:
+            list: contains the non dimenstality constants [E0, T0, I0]
         """
 
         solver = newtonRaphsonFT(startPotential= self.startPotential, revPotential = self.revPotential,
             rateOfPotentialChange = self.rateOfPotentialChange, numberOfMeasurements = self.numberOfMeasurements,
             theta_X_Initial = self.theta_X_Initial, theta_Z_Initial = self.theta_Z_Initial)
-        
-        gamma = 0.0001411712994
-        gamma1 = gamma*0.0195931114228
-        gamma2 = gamma*0.000639515427465
-        gamma3 = gamma*6.94671729801e-06
-        # gamma = 1.41e-6
-        # gamma1 =gamma*0.0196
-        # gamma2 =gamma*6.40e-4
-        # gamma3 =gamma*6.95e-6
-        omega = 2.0*math.pi*solver.freq*solver.T0
 
-        return [gamma, gamma1, gamma2, gamma3, omega]
+        return [solver.E0, solver.T0, solver.I0]
 
     def FT_and_reduce_to_harmonics_4_to_12(self, Data):
         """Fourier transforms given data and reduces it to harmonics 3 to 12
@@ -577,3 +569,225 @@ class wrappedNewton(pints.ForwardModel):
         freq=freq_org[:self.numberOfMeasurements]
         freq = freq[self.initaldiscard:self.numberOfMeasurements - self.enddiscard] # reducing to harmonics 4 - 12
         return freq
+
+    def harmonic_spacing(self, experimental_data, exp_times = None):
+        """caculates the spacing between individual harmonics of the FT current
+
+        Args:
+            experimental_data (numpy array , float): experimental currents 
+            exp_times (numpy array , float): experimental times corresponding to current measurements
+
+        Returns:
+            int: index of the highest magnitude peak of Fourier transformation i.e the peak of the first harmonic
+        """
+
+        full_sim = np.fft.fft(experimental_data)
+        half_full_sim = full_sim[:self.numberOfMeasurements]
+
+        spacing = np.argmax(half_full_sim)
+        print('arg max give : ', spacing)
+        print('spacing bewteen harmonics is therefore : ', spacing-1)
+        low = spacing - 80
+        upper = spacing + 81
+
+        if exp_times is not None:
+            freq_org = np.fft.fftfreq(exp_times.shape[-1], d= exp_times[1])
+            freq_org=freq_org[:self.numberOfMeasurements]
+            xaxislabel = "frequency/Hz" # "potential/V"
+
+            plt.figure(figsize=(18,10))
+            plt.title("experimental FT")
+            plt.ylabel("amplituide")
+            plt.xlabel(xaxislabel)
+            plt.plot(freq_org, np.log10(half_full_sim),'b', label='experimental_data')
+            plt.plot(freq_org[low:upper], np.log10(half_full_sim[low:upper]),'r', label='experimental_harmonic 1')
+            plt.legend(loc='best')
+            plt.show()
+
+            plot_point = spacing - 1
+
+            plt.figure(figsize=(18,10))
+            plt.title("experimental FT harmonic 1 and mid point (max)")
+            plt.ylabel("amplituide")
+            plt.xlabel(xaxislabel)
+            plt.plot(freq_org[low:upper], np.log10(half_full_sim[low:upper]),'r', label='experimental_harmonic 1')
+            plt.plot(freq_org[plot_point], np.log10(half_full_sim[plot_point]),'kX', label='maximum')
+            plt.legend(loc='best')
+            plt.show()
+
+        return int(spacing-1)
+
+    def index_distance_covering(self, Hz_interval, exp_times):
+        """number of indexs needed to span the frequency interval Hz_interal
+
+        Args:
+            Hz_interval (float): Hz interval desried to cut of harmonics around
+            exp_times (numpy array , float): experimental times corresponding to current measurements
+
+        Returns:
+            float: number of frequency steps (indexs) spaning the Hz interval 
+        """
+
+        freq_org = np.fft.fftfreq(exp_times.shape[-1], d= exp_times[1])
+
+        return Hz_interval/freq_org[1]
+
+
+    def ploting_harmonic(self, experimental_data, times, parameter_for_sim, print_these_harmonics = None, Hz_interval = 1.5, print_harmonics = True,
+                         check_FT_harmonic_locations = False, print_all_harmonics = True, print_simulated_harmonics_alone = False):
+        """ploting harmonics of data against simulated harmonics
+
+        Args:
+            experimental_data (numpy array): experimental data
+            times (numpy array): times for simulation
+            parameter_for_sim (numpy array): [kappa0_1, kappa0_2, epsilon0_1, epsilon0_2, mew, zeta]
+        """
+
+        FT_reduced_exp = self.FT_and_reduce_to_harmonics_4_to_12(experimental_data)
+        Ft_reduced_sim = self.simulate_reduced_FT_current(parameters= parameter_for_sim, times = times)
+
+        freq = self.frequencies_for_harmonics_4_to_12(times =times)
+
+        # 4th harmonic centered at 303
+        # should be seprated by ~ 480 measurements
+        print('*'*10+'cacluating harmonic spacing'+'*'*10)
+        spacing = self.harmonic_spacing(experimental_data, times)
+        print('Spacing between harmonics: ', spacing)
+        print('\n'+'*'*10+'cacluating location of 4th harmonic'+'*'*10)
+        mid_point_index = np.argmax(FT_reduced_exp)
+        print('mid point index of 4th harmonic: ', mid_point_index)
+        print('\n'+'*'*10+'index distance of ' + str(Hz_interval) + 'Hz'+'*'*10)
+        index_window = self.index_distance_covering(Hz_interval, times)
+        print('index window covering ' + str(Hz_interval) + 'Hz: ', index_window)
+        index_window = np.round(index_window)
+        print('int index window covering ' + str(Hz_interval) + 'Hz: ', index_window)
+
+
+        if check_FT_harmonic_locations is True:
+            self._ploting_FT_haromics(mid_point_index, index_window, spacing, freq, Ft_reduced_sim, FT_reduced_exp,
+                                      print_simulated_harmonics_alone, print_all_harmonics, print_these_harmonics)
+        
+        if print_harmonics is True:
+            dims = freq.shape
+            self._ploting_ifft_haromics(mid_point_index, index_window, spacing, dims, Ft_reduced_sim, FT_reduced_exp,
+                                        print_simulated_harmonics_alone, print_all_harmonics, print_these_harmonics)
+
+
+
+    def _ploting_ifft_haromics(self, mid_point_index, index_window, spacing, dims, Ft_reduced_sim, FT_reduced_exp,
+                               print_simulated_harmonics_alone, print_all_harmonics, print_these_harmonics):
+
+            harmonic = 4
+            low = int(mid_point_index - index_window)
+            high = int(mid_point_index+ index_window + 1)
+            mid = int(mid_point_index)
+
+            temp = self.get_non_dimensionality_constants()
+
+            I0 = temp[-1]
+            
+            while high <= dims[0]:
+                sim_plot = Ft_reduced_sim[low:high]
+                mid_upper_sim_plot = Ft_reduced_sim[mid:high]
+                lower_sim_plot = Ft_reduced_sim[low:mid]
+                kaiser_window = np.kaiser(sim_plot.shape[0], 2)
+                
+                array_for_iFFT = np.hstack((mid_upper_sim_plot, lower_sim_plot))
+                array_for_iFFT = np.multiply(kaiser_window,array_for_iFFT)
+                sim_harmonic = np.fft.ifft(array_for_iFFT)
+                sim_harmonic = sim_harmonic*I0
+
+                sim_plot = FT_reduced_exp[low:high]
+                mid_upper_sim_plot = FT_reduced_exp[mid:high]
+                lower_sim_plot = FT_reduced_exp[low:mid]
+                
+                array_for_iFFT = np.hstack((mid_upper_sim_plot, lower_sim_plot))
+                array_for_iFFT = np.multiply(kaiser_window,array_for_iFFT)
+                exp_harmonic = np.fft.ifft(array_for_iFFT)
+                exp_harmonic = exp_harmonic*I0
+
+                if print_simulated_harmonics_alone is True:
+                
+                    if print_all_harmonics is True or harmonic in print_these_harmonics:
+                        plt.figure(figsize=(18,10))
+                        plt.title("Harmonic "+ str(harmonic))
+                        plt.ylabel("current/Amps")
+                        plt.plot(sim_harmonic.real,'r', label='Real Simulated Harmonic '+str(harmonic))
+                        plt.plot(sim_harmonic.imag,'r', linestyle='dashed', label='Imaginary Simulated Harmonic '+str(harmonic))
+                        plt.legend(loc='best')
+                        plt.show()
+
+                if print_all_harmonics is True or harmonic in print_these_harmonics:
+
+                    plt.figure(figsize=(18,10))
+                    plt.title("Simulated on Experimental Harmonic "+ str(harmonic))
+                    plt.ylabel("current/Amps")
+                    plt.plot(exp_harmonic.real,'b', label='Real Experimental Harmonic '+str(harmonic))
+                    plt.plot(sim_harmonic.real,'r', label='Real Simulated Harmonic '+str(harmonic))
+                    plt.plot(exp_harmonic.imag,'b', linestyle='dashed', label='Imaginary Experimental Harmonic '+str(harmonic))
+                    plt.plot(sim_harmonic.imag,'r', linestyle='dashed', label='Imaginary Simulated Harmonic '+str(harmonic))
+                    plt.legend(loc='best')
+                    plt.show()
+
+                    plt.figure(figsize=(18,10))
+                    plt.title("Simulated on Experimental Harmonic "+ str(harmonic))
+                    plt.ylabel("current/Amps")
+                    plt.plot(np.absolute(exp_harmonic),'b', label='Absolute Experimental Harmonic '+str(harmonic))
+                    plt.plot(np.absolute(sim_harmonic),'r', label='Absolute Simulated Harmonic '+str(harmonic))
+                    plt.legend(loc='best')
+                    plt.show()
+
+
+                high = high+spacing
+                low = low+spacing
+                mid = mid+spacing
+                harmonic = harmonic +1
+    
+
+    def _ploting_FT_haromics(self, mid_point_index, index_window, spacing, freq, Ft_reduced_sim, FT_reduced_exp,
+                               print_simulated_harmonics_alone, print_all_harmonics, print_these_harmonics):
+        
+        dims = freq.shape
+    
+        harmonic = 4
+        low = int(mid_point_index - index_window)
+        high = int(mid_point_index+ index_window + 1)
+        mid = int(mid_point_index)
+
+        while high <= dims[0]:
+            sim_plot = Ft_reduced_sim[low:high]
+            mid_upper_sim_plot = Ft_reduced_sim[mid:high]
+            lower_sim_plot = Ft_reduced_sim[low:mid]
+            print('sim_plot.shape:', sim_plot.shape)
+            print('mid_upper_sim_plot.shape:', mid_upper_sim_plot.shape)
+            print('lower_sim_plot.shape:', lower_sim_plot.shape)
+            xaxis = freq[low:high] #model.potentialRange
+            xaxis_mid_upper = freq[mid:high]
+            xaxis_lower= freq[low:mid]
+            xaxislabel = "freq/Hz" # "potential/V"
+
+            if print_all_harmonics is True or harmonic in print_these_harmonics:
+                plt.figure(figsize=(18,10))
+                plt.title("simulation and experimental FT")
+                plt.ylabel("amplituide")
+                plt.xlabel(xaxislabel)
+                plt.plot(xaxis, np.log10(sim_plot),'r', label='simulated_harmonic_'+str(harmonic))
+                plt.plot(xaxis_mid_upper, np.log10(mid_upper_sim_plot),'k', label='simulated_harmonic_'+str(harmonic)+'_upper_1/2')
+                plt.plot(xaxis_lower, np.log10(lower_sim_plot),'m', label='simulated_harmonic_'+str(harmonic)+'_lower_1/2')
+                plt.legend(loc='best')
+                plt.show()
+
+                plt.figure(figsize=(18,10))
+                plt.title("simulation and experimental FT")
+                plt.ylabel("amplituide")
+                plt.xlabel(xaxislabel)
+                plt.plot(freq, np.log10(FT_reduced_exp),'b', label='experimental_data')
+                plt.plot(xaxis, np.log10(sim_plot),'r', label='simulated_harmonic_'+str(harmonic))
+                plt.legend(loc='best')
+                plt.show()
+
+
+            high = high+spacing
+            low = low+spacing
+            mid = mid+spacing
+            harmonic = harmonic +1
