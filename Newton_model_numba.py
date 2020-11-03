@@ -14,7 +14,7 @@ spec = [
     ('temp', float64),
     ('F', float64),
     ('s', float64),
-    ('tau', float64),
+    ('GAMMA', float64),
     ('v', float64),
     ('E0', float64),
     ('T0', float64),
@@ -68,8 +68,9 @@ class newtonRaphsonFT():
      Analytical Chemistry 89 (3): 1565–73. https://doi.org/10.1021/acs.analchem.6b03589.
     '''
 
-    def __init__(self, startPotential: float = -0.15, revPotential: float = -0.75, rateOfPotentialChange: float = -22.35e-3, numberOfMeasurements: int= 1000000,  
-                theta_X_Initial: float = 1.0, theta_Z_Initial: float = 0.0, kappa0_1: float = 3400.0, kappa0_2: float = 3400.0 ):
+    def __init__(self, inital_current: float = 6.620541e-07, freq: float = 8.95931721948, startPotential: float = -0.15, revPotential: float = -0.75, rateOfPotentialChange: float = -22.35e-3,
+                 numberOfMeasurements: int= 1000000, deltaepislon: float = 150E-3, uncomp_resis: float = 27.160770551,
+                 electrode_area: float = 0.03, electode_coverage: float = 6.5e-12):
 
         
         #defining constants
@@ -78,14 +79,14 @@ class newtonRaphsonFT():
         self.F = 96485.3329 # A.S.mol−1 Faraday constant
 
         #parameters for non-dimensionalisation
-        self.s = 0.03#E-4 # m^2 geometric area of the electrode
-        self.tau = 6.5e-12#*1.0e3  #mols per m the surface coverage per unit area of the electrode
+        self.s = electrode_area # E-4 # m^2 geometric area of the electrode
+        self.GAMMA = electode_coverage # *1.0e3  #mols per m the surface coverage per unit area of the electrode
         self.v = rateOfPotentialChange #Vs-1 the rate at which the potential is swept over at
 
          # parameters for dimension removal
         self.E0 = (self.R*self.temp)/self.F
         self.T0 = (self.E0/self.v)
-        self.I0 = (self.F*self.s*self.tau)/self.T0
+        self.I0 = (self.F*self.s*self.GAMMA)/self.T0
 
         # electode potential variables for epsilon
         self.epsilon_start = startPotential/self.E0 
@@ -94,24 +95,24 @@ class newtonRaphsonFT():
         self.potentialRange = np.linspace(startPotential, revPotential, numberOfMeasurements)
         self.fullPotentialRange = np.hstack((self.potentialRange,self.potentialRange[1:]))
 
-        self.deltaepislon = 150E-3/self.E0 # V 
-        self.mew  = -0.031244092599793216 #phase
-        self.freq = 8.95931721948 #Hz (0.11161564832 seconds per period insure data has even number of periods)
-        self.omega = 2.0*math.pi*self.freq*self.T0 # dimensionless omega 
+        self.deltaepislon = deltaepislon/self.E0 # V 
+        self.mew  = 0.0 # phase set by solver
+        self.freq = freq #Hz (0.11161564832 seconds per period insure data has even number of periods)
+        self.omega = 0.0 # dimensionless omega  set by solver 2.0*math.pi*self.freq*self.T0
         self.epsilon = 0.0
         self.epsilon_r = 0.0
-        self.row = 27.160770551*(self.I0/self.E0)# dimensionless uncompensated resistance
+        self.row = uncomp_resis*(self.I0/self.E0)# dimensionless uncompensated resistance
 
 
-        self.zeta = self.F*self.s*self.tau/(self.T0*self.I0) 
+        self.zeta = self.F*self.s*self.GAMMA/(self.T0*self.I0) 
 
         # electro-potential of the reaction
-        self.epsilon0_1 = -0.437459534627/self.E0
-        self.epsilon0_2 = -0.46045114238/self.E0
+        self.epsilon0_1 = 0.0 # set by solver -0.437459534627/self.E0
+        self.epsilon0_2 = 0.0 # set by solver -0.46045114238/self.E0
 
         #electron transfer rate constants
-        self.kappa0_1 = kappa0_1 *self.T0
-        self.kappa0_2 = kappa0_2*self.T0
+        self.kappa0_1 = 0.0 # set by solver kappa0_1 *self.T0
+        self.kappa0_2 = 0.0 # set by solver kappa0_2*self.T0
 
         #electron charge transfer coefficients
         self.alpha1 = 0.5
@@ -126,11 +127,6 @@ class newtonRaphsonFT():
         self.endT = self.revT*2.0
         self.timeStepSize = self.revT/float(numberOfMeasurements) # in seconds
         self.dimlessTimeStepSize = (self.revT/float(numberOfMeasurements))/self.T0
-        
-        # self.TtoRev = (np.linspace(start = self.startT, stop = self.revT, num = numberOfMeasurements, endpoint = True))
-        # self.TafterRev = (np.linspace(start = self.revT, stop = self.revT*2, num = numberOfMeasurements, endpoint = True))
-        # self.T = np.hstack((self.TtoRev, self.TafterRev[1:]))
-        # self.TafterRev = self.TafterRev[1:]
 
         double_measurements = numberOfMeasurements*2
         self.theta_X = np.zeros(double_measurements, dtype = np.float64)
@@ -139,9 +135,9 @@ class newtonRaphsonFT():
         self.dtheta_Z_dt = np.zeros(double_measurements, dtype = np.float64)
         self.i = np.zeros(double_measurements, dtype = np.float64)
 
-        self.theta_X_Initial = theta_X_Initial
-        self.theta_Z_Initial = theta_Z_Initial
-        self.I_inital = 6.620541e-07
+        self.theta_X_Initial = 1.0
+        self.theta_Z_Initial = 0.0
+        self.I_inital = inital_current
 
 
         # capacitance parameters
@@ -365,18 +361,21 @@ class newtonRaphsonFT():
 
         return self.i
 
-
 class wrappedNewton(pints.ForwardModel):
-    def __init__(self, startPotential: float = -0.15, revPotential: float = -0.75, rateOfPotentialChange: float = -22.35e-3,
-        numberOfMeasurements: int= 45496,  theta_X_Initial: float = 1.0, theta_Z_Initial: float = 0.0,
-        initaldiscard: float = 0.025, enddiscard: float = 0.875):
+    def __init__(self, inital_current: float = 6.620541e-07, freq: float = 8.95931721948, startPotential: float = -0.15, revPotential: float = -0.75,
+                 rateOfPotentialChange: float = -22.35e-3, numberOfMeasurements: int= 45496, deltaepislon: float = 150E-3, uncomp_resis: float = 27.160770551,
+                 electrode_area: float = 0.03, electode_coverage: float = 6.5e-12, initaldiscard: float = 0.025, enddiscard: float = 0.875):
 
+        self.inital_current = inital_current
+        self.freq = freq
         self.startPotential = startPotential
         self.revPotential = revPotential
         self.rateOfPotentialChange = rateOfPotentialChange
         self.numberOfMeasurements = numberOfMeasurements
-        self.theta_X_Initial = theta_X_Initial
-        self.theta_Z_Initial = theta_Z_Initial
+        self.deltaepislon = deltaepislon
+        self.uncomp_resis = uncomp_resis
+        self.electrode_area = electrode_area
+        self.electode_coverage = electode_coverage
         self.initaldiscard = int(initaldiscard*numberOfMeasurements)
         self.enddiscard = int(enddiscard*numberOfMeasurements)
 
@@ -416,9 +415,9 @@ class wrappedNewton(pints.ForwardModel):
 
         # creating instance of newtonRaphsonFT
 
-        solver = newtonRaphsonFT(startPotential= self.startPotential, revPotential = self.revPotential,
-            rateOfPotentialChange = self.rateOfPotentialChange, numberOfMeasurements = self.numberOfMeasurements,
-            theta_X_Initial = self.theta_X_Initial, theta_Z_Initial = self.theta_Z_Initial)
+        solver = newtonRaphsonFT(inital_current=self.inital_current, freq=self.freq, startPotential=self.startPotential, revPotential=self.revPotential,
+                 rateOfPotentialChange=self.rateOfPotentialChange, numberOfMeasurements=self.numberOfMeasurements, deltaepislon=self.deltaepislon,
+                 uncomp_resis=self.uncomp_resis, electrode_area=self.electrode_area, electode_coverage=self.electode_coverage)
 
         # nondimensionalsing parameters
         params= []
@@ -427,7 +426,7 @@ class wrappedNewton(pints.ForwardModel):
         params.append(parameters[2]/solver.E0) #E0_1
         params.append(parameters[3]/solver.E0) # E0_2
         params.append(parameters[4]) # phase is demnsionless
-        params.append(parameters[5]*(solver.F*solver.s*solver.tau/(solver.T0*solver.I0))) # zeta
+        params.append(parameters[5]*(solver.F*solver.s*solver.GAMMA/(solver.T0*solver.I0))) # zeta
         # nondimensionalsing parameter for capacitance
         # self.gamma0 = (parameters[6]*self.E0/(self.T0*self.I0))
         # self.gamma1 = parameters[7]*self.E0
@@ -539,8 +538,7 @@ class wrappedNewton(pints.ForwardModel):
         """
 
         solver = newtonRaphsonFT(startPotential= self.startPotential, revPotential = self.revPotential,
-            rateOfPotentialChange = self.rateOfPotentialChange, numberOfMeasurements = self.numberOfMeasurements,
-            theta_X_Initial = self.theta_X_Initial, theta_Z_Initial = self.theta_Z_Initial)
+            rateOfPotentialChange = self.rateOfPotentialChange, numberOfMeasurements = self.numberOfMeasurements)
 
         return [solver.E0, solver.T0, solver.I0]
 
