@@ -48,14 +48,14 @@ class newtonRaphsonCap():
     '''
     This is a class to solve the mathematical model outlined in [1] written in base python
     using an implimentation of the Newton-Raphson methond
-
     [1] Adamson, Hope, Martin Robinson, Paul S. Bond, Basem Soboh, Kathryn Gillow, Alexandr N. Simonov, Darrell M. Elton, et al. 2017. 
     ‘Analysis of HypD Disulfide Redox Chemistry via Optimization of Fourier Transformed Ac Voltammetric Data’.
      Analytical Chemistry 89 (3): 1565–73. https://doi.org/10.1021/acs.analchem.6b03589.
     '''
 
-    def __init__(self, timeStepSize: float, numberOfMeasurements: int, startPotential: float = -0.15, revPotential: float = -0.75, rateOfPotentialChange: float = -22.35e-3):
-
+    def __init__(self, timeStepSize: float, numberOfMeasurements: int, startPotential: float = -0.15, revPotential: float = -0.75,
+                 rateOfPotentialChange: float = -22.35e-3, inital_current: float = 6.620541e-07, freq: float = 8.95931721948,
+                 deltaepislon: float = 150E-3, electrode_area: float = 0.03, electode_coverage: float = 6.5e-12):
         
         #defining constants
         self.R = 8.314 #J / mol·K the perfect gas constant
@@ -63,8 +63,8 @@ class newtonRaphsonCap():
         self.F = 96485.3329 # A.S.mol−1 Faraday constant
 
         #parameters for non-dimensionalisation
-        self.s = 0.03#E-4 # m^2 geometric area of the electrode
-        self.tau = 6.5e-12#*1.0e3  #mols per m the surface coverage per unit area of the electrode
+        self.s = electrode_area#E-4 # m^2 geometric area of the electrode
+        self.tau = electode_coverage#*1.0e3  #mols per m the surface coverage per unit area of the electrode
         self.v = rateOfPotentialChange #Vs-1 the rate at which the potential is swept over at
 
          # parameters for dimension removal
@@ -76,14 +76,14 @@ class newtonRaphsonCap():
         self.epsilon_start = startPotential/self.E0 
         self.epsilon_reverse = revPotential/self.E0 
 
-        self.deltaepislon = 150E-3/self.E0 # V 
+        self.deltaepislon = deltaepislon/self.E0 # V 
         self.mew  = 0.0 #-0.031244092599793216 #phase
-        self.freq = 8.95931721948 #Hz (0.11161564832 seconds per period insure data has even number of periods)
+        self.freq = freq #Hz (0.11161564832 seconds per period insure data has even number of periods)
         self.omega = 2.0*math.pi*self.freq*self.T0 # dimensionless omega
         self.omega0 = 2.0*math.pi*self.freq*self.T0 # dimensionless omega 
         self.epsilon = 0.0
         self.epsilon_r = 0.0
-        self.row = 27.160770551*(self.I0/self.E0)# dimensionless uncompensated resistance
+        self.row = 0.0 # 27.160770551*(self.I0/self.E0)# dimensionless uncompensated resistance
 
         #time interval
         
@@ -96,7 +96,7 @@ class newtonRaphsonCap():
 
         self.i = np.zeros(numberOfMeasurements, dtype = np.float64)
 
-        self.I_inital = 6.620541e-07
+        self.I_inital = inital_current
 
         # capacitance parameters
         self.gamma = 0.0
@@ -224,8 +224,9 @@ class newtonRaphsonCap():
         self.gamma1 = (cap_params[1]*self.E0)*non_dimensiosation_constant
         self.gamma2 = (cap_params[2]*math.pow(self.E0,2.0))*non_dimensiosation_constant
         self.gamma3 = (cap_params[3]*math.pow(self.E0,3.0))*non_dimensiosation_constant
-        self.omega = (cap_params[4])
-        self.mew = (cap_params[5])
+        self.omega = cap_params[4]
+        self.mew = cap_params[5]
+        self.row = cap_params[6]*(self.I0/self.E0)
 
 
     def solve(self, times):
@@ -248,32 +249,47 @@ class newtonRaphsonCap():
 
 class wrappedNewtonCap(pints.ForwardModel):
     def __init__(self, times: float, startPotential: float = -0.15, revPotential: float = -0.75, rateOfPotentialChange: float = -22.35e-3,
-                 beingPureCapitanceto: int = 0, endPureCapatianceFor: int = 0):
+                inital_current: float = 6.620541e-07, freq: float = 8.95931721948, deltaepislon: float = 150E-3,
+                electrode_area: float = 0.03, electode_coverage: float = 6.5e-12, beingPureCapitanceto: float = 0.2,
+                endPureCapatianceFor: float = 0.2):
 
         self.startPotential = startPotential
         self.revPotential = revPotential
         self.rateOfPotentialChange = rateOfPotentialChange
-        # self.numberOfMeasurements = 0
-        # self.timeStepSize = 0
-        self.endPureCapatianceFor = endPureCapatianceFor
-        self.beingPureCapitanceto = beingPureCapitanceto
-
+       
+       
         length = times.shape
-        self.timeStepSize = times[1]
         self.numberOfMeasurements = length[0]
+        # As the first time is at 0.0s we take one of the numberOfMeasurements
+        # to split total time evenly and get the most accurate timeStepSize
+        self.timeStepSize = times[-1]/(self.numberOfMeasurements - 1)
+
+        self.endPureCapatianceFor = int(endPureCapatianceFor*int(self.numberOfMeasurements/2))
+        self.beingPureCapitanceto = int(beingPureCapitanceto*int(self.numberOfMeasurements/2))
+        print('self.endPureCapatianceFor: ',self.endPureCapatianceFor)
+        print('self.beingPureCapitanceto: ',self.beingPureCapitanceto)
+
 
         self.endCap = self.numberOfMeasurements - self.endPureCapatianceFor
 
         self.midCapLow = int(self.numberOfMeasurements/2)-self.endPureCapatianceFor
         self.midCaphigh = int(self.numberOfMeasurements/2)+self.beingPureCapitanceto
 
+        # parameters to pass to main model
+        self.inital_current=inital_current
+        self.freq=freq
+        self.deltaepislon=deltaepislon
+        self.electrode_area=electrode_area
+        self.electode_coverage=electode_coverage
+
         # capactiance parameters
-        self.gamma0 = 0
-        self.gamma1 = 0
-        self.gamma2 = 0
-        self.gamma3 = 0
-        self.omega = 0
-        self.mew = 0
+        self.gamma0 = 0.0
+        self.gamma1 = 0.0
+        self.gamma2 = 0.0
+        self.gamma3 = 0.0
+        self.omega = 0.0
+        self.mew = 0.0
+        self.uncomp_resis=27.160770551
         
     def n_outputs(self):
         """ 
@@ -287,8 +303,8 @@ class wrappedNewtonCap(pints.ForwardModel):
         """ See :meth:`pints.ForwardModel.n_parameters()`. 
         :return: dimensions of parameter vector
         """
-        # [gamma, gamma1, gamma2, gamma3, omega, mew]
-        return 6
+        # [gamma, gamma1, gamma2, gamma3, omega, mew, uncompensated_resistance]
+        return 7
     
     def _simulate(self, parameters, times, reduce):
         """
@@ -302,9 +318,11 @@ class wrappedNewtonCap(pints.ForwardModel):
 
         # creating instance of newtonRaphsonCap
 
-        solver = newtonRaphsonCap(timeStepSize = self.timeStepSize, numberOfMeasurements = self.numberOfMeasurements,
-                                  startPotential = self.startPotential, revPotential = self.revPotential,
-                                  rateOfPotentialChange = self.rateOfPotentialChange)
+        solver = newtonRaphsonCap(timeStepSize=self.timeStepSize, numberOfMeasurements=self.numberOfMeasurements,
+                                  startPotential=self.startPotential, revPotential=self.revPotential,
+                                  rateOfPotentialChange=self.rateOfPotentialChange, inital_current=self.inital_current,
+                                  freq=self.freq, deltaepislon=self.deltaepislon, electrode_area =self.electrode_area,
+                                  electode_coverage=self.electode_coverage)
 
         solver.set_capacitance_params(parameters)
 
@@ -333,19 +351,22 @@ class wrappedNewtonCap(pints.ForwardModel):
 
     def suggested_capacitance_params(self):
         """Returns a list with suggestsed capacitance parameters for the model with dimension
-        return: [gamma0, gamma1, gamma2, gamma3, omega, mew]
+        return: [gamma0, gamma1, gamma2, gamma3, omega, mew, uncompensated_resistance]
         """
 
-        solver = newtonRaphsonCap(timeStepSize = self.timeStepSize, numberOfMeasurements = self.numberOfMeasurements,
-                                  startPotential = self.startPotential, revPotential = self.revPotential,
-                                  rateOfPotentialChange = self.rateOfPotentialChange)
+        solver = newtonRaphsonCap(timeStepSize=self.timeStepSize, numberOfMeasurements=self.numberOfMeasurements,
+                                  startPotential=self.startPotential, revPotential=self.revPotential,
+                                  rateOfPotentialChange=self.rateOfPotentialChange, inital_current=self.inital_current,
+                                  freq=self.freq, deltaepislon=self.deltaepislon, electrode_area =self.electrode_area,
+                                  electode_coverage=self.electode_coverage)
         
         gamma = 0.0001411712994
         gamma1 = gamma*0.0195931114228
         gamma2 = gamma*0.000639515427465
         gamma3 = gamma*6.94671729801e-06
 
-        return [gamma, gamma1, gamma2, gamma3, 2.0*math.pi*solver.freq*solver.T0, -0.031244092599793216]
+        return [gamma, gamma1, gamma2, gamma3, 2.0*math.pi*solver.freq*solver.T0, -0.031244092599793216, 27.160770551]
+
 
     def reshape_to_cap_regions(self, array):
 
@@ -356,19 +377,24 @@ class wrappedNewtonCap(pints.ForwardModel):
         reshaped = np.hstack((a,b,c))
         return reshaped
 
+
     def get_omega_0(self):
 
-        solver = newtonRaphsonCap(timeStepSize = self.timeStepSize, numberOfMeasurements = self.numberOfMeasurements,
-                                  startPotential = self.startPotential, revPotential = self.revPotential,
-                                  rateOfPotentialChange = self.rateOfPotentialChange)
+        solver = newtonRaphsonCap(timeStepSize=self.timeStepSize, numberOfMeasurements=self.numberOfMeasurements,
+                                  startPotential=self.startPotential, revPotential=self.revPotential,
+                                  rateOfPotentialChange=self.rateOfPotentialChange, inital_current=self.inital_current,
+                                  freq=self.freq, deltaepislon=self.deltaepislon, electrode_area =self.electrode_area,
+                                  electode_coverage=self.electode_coverage)
 
         return solver.omega0
 
     def get_non_dimensionality_constants(self):
 
-        solver = newtonRaphsonCap(timeStepSize = self.timeStepSize, numberOfMeasurements = self.numberOfMeasurements,
-                                  startPotential = self.startPotential, revPotential = self.revPotential,
-                                  rateOfPotentialChange = self.rateOfPotentialChange)
+        solver = newtonRaphsonCap(timeStepSize=self.timeStepSize, numberOfMeasurements=self.numberOfMeasurements,
+                                  startPotential=self.startPotential, revPotential=self.revPotential,
+                                  rateOfPotentialChange=self.rateOfPotentialChange, inital_current=self.inital_current,
+                                  freq=self.freq, deltaepislon=self.deltaepislon, electrode_area =self.electrode_area,
+                                  electode_coverage=self.electode_coverage)
 
         return [solver.E0, solver.T0, solver.I0]
 
