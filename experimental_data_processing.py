@@ -2,7 +2,6 @@ import numpy as np
 import pints
 import pandas as pd
 import csv
-#from newtonFT import newtonRaphsonFT, wrappedNewton
 
 class processingExperimentalData():
 
@@ -73,19 +72,34 @@ class processingExperimentalData():
         """
         untouched_periods = self.how_many_periods(data,freq)
 
+        length = data.shape[0]
+        
+        measurements_per_period = length/untouched_periods
+
+        print('measurements_per_period ~ ', measurements_per_period)
+
         int_periods = int(untouched_periods)
 
         updated_periods = untouched_periods.copy()
         updated = data.copy()
         N=0
 
+        # FIXME: what if difference less than 10?
+        n0 = int(((untouched_periods - int_periods)*measurements_per_period) -10.0)
+
         while updated_periods > int_periods:
             # Number of rows to drop 
             n = 1
             N = N+n
             
-            # Dropping last n rows using drop 
-            updated.drop(updated.tail(n).index, inplace = True) 
+            if N == 1:
+                N = N+n0
+                # Dropping last n0 rows using drop 
+                updated.drop(updated.tail(n0).index, inplace = True) 
+
+            else:
+                # Dropping last n rows using drop 
+                updated.drop(updated.tail(n).index, inplace = True) 
 
             # calculating number of periods in reduced data size
 
