@@ -68,7 +68,7 @@ class newtonRaphsonFT():
      Analytical Chemistry 89 (3): 1565–73. https://doi.org/10.1021/acs.analchem.6b03589.
     '''
 
-    def __init__(self, inital_current: float = 6.620541e-07, freq: float = 8.95931721948, startPotential: float = -0.15, revPotential: float = -0.75, rateOfPotentialChange: float = -22.35e-3,
+    def __init__(self, timeStepSize: float, inital_current: float = 6.620541e-07, freq: float = 8.95931721948, startPotential: float = -0.15, revPotential: float = -0.75, rateOfPotentialChange: float = -22.35e-3,
                  numberOfMeasurements: int= 1000000, deltaepislon: float = 150E-3, uncomp_resis: float = 27.160770551,
                  electrode_area: float = 0.03, electode_coverage: float = 6.5e-12):
 
@@ -92,6 +92,7 @@ class newtonRaphsonFT():
         self.epsilon_start = startPotential/self.E0 
         self.epsilon_reverse = revPotential/self.E0 
         #self.potentialRange = np.concatenate((np.linspace(startPotential, revPotential, numberOfMeasurements), np.linspace(revPotential,startPotential, numberOfMeasurements)), axis=None)
+        # FIXME: potentialRange needs fixing
         self.potentialRange = np.linspace(startPotential, revPotential, numberOfMeasurements)
         self.fullPotentialRange = np.hstack((self.potentialRange,self.potentialRange[1:]))
 
@@ -125,15 +126,14 @@ class newtonRaphsonFT():
         self.revT =  abs((revPotential - startPotential)/(rateOfPotentialChange))#specify in seconds
         self.dimlessRevT = self.revT/self.T0#
         self.endT = self.revT*2.0
-        self.timeStepSize = self.revT/float(numberOfMeasurements) # in seconds
-        self.dimlessTimeStepSize = (self.revT/float(numberOfMeasurements))/self.T0
+        self.timeStepSize = timeStepSize # in seconds
+        self.dimlessTimeStepSize = timeStepSize/self.T0
 
-        double_measurements = numberOfMeasurements*2
-        self.theta_X = np.zeros(double_measurements, dtype = np.float64)
-        self.theta_Z = np.zeros(double_measurements, dtype = np.float64)
-        self.dtheta_X_dt = np.zeros(double_measurements, dtype = np.float64)
-        self.dtheta_Z_dt = np.zeros(double_measurements, dtype = np.float64)
-        self.i = np.zeros(double_measurements, dtype = np.float64)
+        self.theta_X = np.zeros(numberOfMeasurements, dtype = np.float64)
+        self.theta_Z = np.zeros(numberOfMeasurements, dtype = np.float64)
+        self.dtheta_X_dt = np.zeros(numberOfMeasurements, dtype = np.float64)
+        self.dtheta_Z_dt = np.zeros(numberOfMeasurements, dtype = np.float64)
+        self.i = np.zeros(numberOfMeasurements, dtype = np.float64)
 
         self.theta_X_Initial = 1.0
         self.theta_Z_Initial = 0.0
@@ -362,29 +362,36 @@ class newtonRaphsonFT():
         return self.i
 
 class wrappedNewton(pints.ForwardModel):
-    def __init__(self, inital_current: float = 6.620541e-07, freq: float = 8.95931721948, startPotential: float = -0.15, revPotential: float = -0.75,
-                 rateOfPotentialChange: float = -22.35e-3, numberOfMeasurements: int= 45496, deltaepislon: float = 150E-3, uncomp_resis: float = 27.160770551,
-                 electrode_area: float = 0.03, electode_coverage: float = 6.5e-12, initaldiscard: float = 0.025, enddiscard: float = 0.875):
+    def __init__(self, times: float, inital_current: float = 6.620541e-07, freq: float = 8.95931721948, startPotential: float = -0.15, revPotential: float = -0.75,
+                 rateOfPotentialChange: float = -22.35e-3, deltaepislon: float = 150E-3, uncomp_resis: float = 27.160770551,
+                 electrode_area: float = 0.03, electode_coverage: float = 6.5e-12,initaldiscard: float = 0.025, enddiscard: float = 0.875,
+                 cap_params: tuple = (1.13465158675681913e-04, 1.71228672908262905e-06, -2.02632468231267758e-05, -6.41028656277626023e-05, -6.47083954113886932e+01)):
 
         self.inital_current = inital_current
         self.freq = freq
         self.startPotential = startPotential
         self.revPotential = revPotential
         self.rateOfPotentialChange = rateOfPotentialChange
-        self.numberOfMeasurements = numberOfMeasurements
+        length = times.shape
+        self.numberOfMeasurements = length[0]
+        self.half_of_measuremnts = int(self.numberOfMeasurements/2)
         self.deltaepislon = deltaepislon
         self.uncomp_resis = uncomp_resis
         self.electrode_area = electrode_area
         self.electode_coverage = electode_coverage
-        self.initaldiscard = int(initaldiscard*numberOfMeasurements)
-        self.enddiscard = int(enddiscard*numberOfMeasurements)
+        self.initaldiscard = int(initaldiscard*self.half_of_measuremnts)
+        self.enddiscard = int(enddiscard*self.half_of_measuremnts)
+
+        # as the first time is at 0.0s we take one of the numberOfMeasurements
+        # to split total time evenly and get the most accurate timeStepSize
+        self.timeStepSize = times[-1]/(self.numberOfMeasurements - 1)
 
         # capactiance parameters
-        self.gamma0 = 0
-        self.gamma1 = 0
-        self.gamma2 = 0
-        self.gamma3 = 0
-        self.omega = 0
+        self.gamma0 = cap_params[0]
+        self.gamma1 = cap_params[1]
+        self.gamma2 = cap_params[2]
+        self.gamma3 = cap_params[3]
+        self.omega = cap_params[4]
         
     def n_outputs(self):
         """ 
@@ -415,9 +422,10 @@ class wrappedNewton(pints.ForwardModel):
 
         # creating instance of newtonRaphsonFT
 
-        solver = newtonRaphsonFT(inital_current=self.inital_current, freq=self.freq, startPotential=self.startPotential, revPotential=self.revPotential,
-                 rateOfPotentialChange=self.rateOfPotentialChange, numberOfMeasurements=self.numberOfMeasurements, deltaepislon=self.deltaepislon,
-                 uncomp_resis=self.uncomp_resis, electrode_area=self.electrode_area, electode_coverage=self.electode_coverage)
+        solver = newtonRaphsonFT(timeStepSize=self.timeStepSize, inital_current=self.inital_current, freq=self.freq, startPotential=self.startPotential,
+                                 revPotential=self.revPotential, rateOfPotentialChange=self.rateOfPotentialChange,
+                                 numberOfMeasurements=self.numberOfMeasurements, deltaepislon=self.deltaepislon, uncomp_resis=self.uncomp_resis,
+                                 electrode_area=self.electrode_area, electode_coverage=self.electode_coverage)
 
         # nondimensionalsing parameters
         params= []
@@ -436,7 +444,7 @@ class wrappedNewton(pints.ForwardModel):
         params = np.asarray(params)
 
         solver.set_faradaic_parameters(params)
-        capacitance = self.suggested_capacitance_params()
+        capacitance = self.get_capacitance_params()
         solver.set_capacitance_params(capacitance)
 
         # solving up to potential reversal
@@ -494,41 +502,17 @@ class wrappedNewton(pints.ForwardModel):
         epsilon0_1 and epsilon0_2 have dims V
         mew is in radians
         zeta is dimensionless
-        return: [kappa0_1, kappa0_2, epsilon0_1, epsilon0_2, mew, zeta,
-                gamma0, gamma1, gamma2, gamma3, omega]
+        return: [kappa0_1, kappa0_2, epsilon0_1, epsilon0_2, mew, zeta]
         """
         # mew = -8.82407598543352156e-02 # by my fitting
         mew = -0.031244092599793216 # by paper
         return [3400.0, 3400.0, -0.437459534627, -0.46045114238, mew, 1.0]
 
-    def suggested_capacitance_params(self):
+    def get_capacitance_params(self):
         """Returns a list with suggestsed capacitance parameters for the model with dimension
         return: [gamma0, gamma1, gamma2, gamma3, omega]
         """
-
-        # solver = newtonRaphsonFT(startPotential= self.startPotential, revPotential = self.revPotential,
-        #     rateOfPotentialChange = self.rateOfPotentialChange, numberOfMeasurements = self.numberOfMeasurements,
-        #     theta_X_Initial = self.theta_X_Initial, theta_Z_Initial = self.theta_Z_Initial)
-        
-        # gamma = 0.0001411712994
-        # gamma1 = gamma*0.0195931114228
-        # gamma2 = gamma*0.000639515427465
-        # gamma3 = gamma*6.94671729801e-06
-        # omega = 2.0*math.pi*solver.freq*solver.T0
-        # gamma = 1.41e-6
-        # gamma1 =gamma*0.0196
-        # gamma2 =gamma*6.40e-4
-        # gamma3 =gamma*6.95e-6
-
-        #Score at papers solution: 1344322.7109559912
-        #Score at papers solution with my cap: 1229082.1470475865
-
-        gamma = 1.13465158675681913e-04
-        gamma1 =  1.71228672908262905e-06
-        gamma2 = -2.02632468231267758e-05
-        gamma3 =  -6.41028656277626023e-05
-        omega = -6.47083954113886932e+01
-        return [gamma, gamma1, gamma2, gamma3, omega]
+        return [self.gamma0, self.gamma1, self.gamma2, self.gamma3, self.omega]
 
     def get_non_dimensionality_constants(self):
         """ Helper function to obtain the non dimensionality constants from the base Python class
@@ -537,8 +521,10 @@ class wrappedNewton(pints.ForwardModel):
             list: contains the non dimenstality constants [E0, T0, I0]
         """
 
-        solver = newtonRaphsonFT(startPotential= self.startPotential, revPotential = self.revPotential,
-            rateOfPotentialChange = self.rateOfPotentialChange, numberOfMeasurements = self.numberOfMeasurements)
+        solver = newtonRaphsonFT(timeStepSize=self.timeStepSize, inital_current=self.inital_current, freq=self.freq, startPotential=self.startPotential,
+                                 revPotential=self.revPotential, rateOfPotentialChange=self.rateOfPotentialChange, numberOfMeasurements=self.numberOfMeasurements,
+                                 deltaepislon=self.deltaepislon, uncomp_resis=self.uncomp_resis, electrode_area=self.electrode_area,
+                                 electode_coverage=self.electode_coverage)
 
         return [solver.E0, solver.T0, solver.I0]
 
@@ -552,8 +538,8 @@ class wrappedNewton(pints.ForwardModel):
         #sp = sp/(self.numberOfMeasurements*2) # as FFT scales by number of measurements to make inverse easy
         #sp = np.abs(sp) # combining real and imaginary parts
         #sp = 2*sp # doubling amplitudes as it is split between -ve and +ve frequencies and we are going to discard negative frequencies
-        sp = sp[:self.numberOfMeasurements] #discarding -ve frequencies
-        output = sp[self.initaldiscard:self.numberOfMeasurements - self.enddiscard] # reducing to harmonics 4 - 12
+        sp = sp[:self.half_of_measuremnts] #discarding -ve frequencies
+        output = sp[self.initaldiscard:self.half_of_measuremnts - self.enddiscard] # reducing to harmonics 4 - 12
         output = np.asarray(output)
         return output
 
@@ -564,10 +550,10 @@ class wrappedNewton(pints.ForwardModel):
         return: numpy array contain fourier transformed data for harmonics 3 -12
         """
         freq_org = np.fft.fftfreq(times.shape[-1], d= times[1])
-        freq=freq_org[:self.numberOfMeasurements]
-        freq = freq[self.initaldiscard:self.numberOfMeasurements - self.enddiscard] # reducing to harmonics 4 - 12
+        freq=freq_org[:self.half_of_measuremnts]
+        freq = freq[self.initaldiscard:self.half_of_measuremnts - self.enddiscard] # reducing to harmonics 4 - 12
         return freq
-
+    
     def harmonic_spacing(self, experimental_data, exp_times = None):
         """caculates the spacing between individual harmonics of the FT current
 
@@ -580,17 +566,26 @@ class wrappedNewton(pints.ForwardModel):
         """
 
         full_sim = np.fft.fft(experimental_data)
-        half_full_sim = full_sim[:self.numberOfMeasurements]
+        half_full_sim = full_sim[:self.half_of_measuremnts]
 
         spacing = np.argmax(half_full_sim)
         print('arg max give : ', spacing)
         print('spacing bewteen harmonics is therefore : ', spacing-1)
+        real_spacing = np.argmax(half_full_sim.real)
+        print('real arg max give : ', spacing)
+        print('real_spacing bewteen harmonics is therefore : ', real_spacing-1)
+        absolute_spacing = np.argmax(np.absolute(half_full_sim))
+        print('absolute arg max give : ', absolute_spacing)
+        print('absolute spacing bewteen harmonics is therefore : ', absolute_spacing-1)
+        imag_spacing = np.argmax(half_full_sim.imag)
+        print('imag arg max give : ', spacing)
+        print('imag_spacing bewteen harmonics is therefore : ', imag_spacing-1)
         low = spacing - 80
         upper = spacing + 81
 
         if exp_times is not None:
             freq_org = np.fft.fftfreq(exp_times.shape[-1], d= exp_times[1])
-            freq_org=freq_org[:self.numberOfMeasurements]
+            freq_org=freq_org[:self.half_of_measuremnts]
             xaxislabel = "frequency/Hz" # "potential/V"
 
             plt.figure(figsize=(18,10))
@@ -603,6 +598,9 @@ class wrappedNewton(pints.ForwardModel):
             plt.show()
 
             plot_point = spacing - 1
+            real_plot_point = real_spacing - 1
+            absolute_plot_point = absolute_spacing - 1
+            imag_plot_point = imag_spacing - 1
 
             plt.figure(figsize=(18,10))
             plt.title("experimental FT harmonic 1 and mid point (max)")
@@ -610,10 +608,15 @@ class wrappedNewton(pints.ForwardModel):
             plt.xlabel(xaxislabel)
             plt.plot(freq_org[low:upper], np.log10(half_full_sim[low:upper]),'r', label='experimental_harmonic 1')
             plt.plot(freq_org[plot_point], np.log10(half_full_sim[plot_point]),'kX', label='maximum')
+            plt.plot(freq_org[real_plot_point], np.log10(half_full_sim[real_plot_point]),'yX', label='real maximum')
+            plt.plot(freq_org[absolute_plot_point], np.log10(half_full_sim[absolute_plot_point]),'cX', label='absoulute maximum')
+            plt.plot(freq_org[imag_plot_point], np.log10(half_full_sim[imag_plot_point]),'mX', label='imag maximum')
+            plt.plot(freq_org[absolute_plot_point +1], np.log10(half_full_sim[absolute_plot_point+1]),'gX', label='absoulute maximum+1')
             plt.legend(loc='best')
             plt.show()
-
-        return int(spacing-1)
+        # change as approriate
+        # was orginally -1
+        return int(spacing+1)
 
     def index_distance_covering(self, Hz_interval, exp_times):
         """number of indexs needed to span the frequency interval Hz_interal
@@ -764,14 +767,30 @@ class wrappedNewton(pints.ForwardModel):
             xaxis_lower= freq[low:mid]
             xaxislabel = "freq/Hz" # "potential/V"
 
+            exp_plot = FT_reduced_exp[low:high]
+            mid_upper_exp_plot = FT_reduced_exp[mid:high]
+            lower_exp_plot = FT_reduced_exp[low:mid]
+
             if print_all_harmonics is True or harmonic in print_these_harmonics:
                 plt.figure(figsize=(18,10))
-                plt.title("simulation and experimental FT")
+                plt.title("simulation FT")
                 plt.ylabel("amplituide")
                 plt.xlabel(xaxislabel)
                 plt.plot(xaxis, np.log10(sim_plot),'r', label='simulated_harmonic_'+str(harmonic))
-                plt.plot(xaxis_mid_upper, np.log10(mid_upper_sim_plot),'k', label='simulated_harmonic_'+str(harmonic)+'_upper_1/2')
+                plt.plot(xaxis_mid_upper[1:], np.log10(mid_upper_sim_plot[1:]),'k', label='simulated_harmonic_'+str(harmonic)+'_upper_1/2')
                 plt.plot(xaxis_lower, np.log10(lower_sim_plot),'m', label='simulated_harmonic_'+str(harmonic)+'_lower_1/2')
+                plt.plot(freq[mid], np.log10(Ft_reduced_sim[mid]),'cX', label='harmonic_center')
+                plt.legend(loc='best')
+                plt.show()
+
+                plt.figure(figsize=(18,10))
+                plt.title("experimental FT")
+                plt.ylabel("amplituide")
+                plt.xlabel(xaxislabel)
+                plt.plot(xaxis, np.log10(exp_plot),'r', label='experimental_harmonic_'+str(harmonic))
+                plt.plot(xaxis_mid_upper[1:], np.log10(mid_upper_exp_plot[1:]),'k', label='experimental_harmonic_'+str(harmonic)+'_upper_1/2')
+                plt.plot(xaxis_lower, np.log10(lower_exp_plot),'m', label='experimental_harmonic_'+str(harmonic)+'_lower_1/2')
+                plt.plot(freq[mid], np.log10(FT_reduced_exp[mid]),'cX', label='harmonic_center')
                 plt.legend(loc='best')
                 plt.show()
 
