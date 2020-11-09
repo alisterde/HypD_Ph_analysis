@@ -135,3 +135,7 @@ dmypy.json
 # ignoring Data becuase it's large and unprocessed
 Data/220415
 Data/processed/old
+Data/processed/old_current
+
+# ignoring all plots to reduce pushes
+*.png
