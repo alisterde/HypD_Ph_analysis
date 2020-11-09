@@ -5,10 +5,9 @@ import csv
 
 class processingExperimentalData():
 
-    def __init__(self, input_file_path: str, output_folder_path: str):
+    def __init__(self, input_file_path: str):
 
         self.input_file_path = input_file_path
-        self.output_folder_path= output_folder_path
         self.data= pd.read_csv(input_file_path, sep='\t')
         print('columnsnames: ', self.data.columns)
 
@@ -29,7 +28,7 @@ class processingExperimentalData():
         reduced_data = data_copy.iloc[::X]
         return reduced_data
 
-    def save_data(self, data):
+    def save_data(self, data, output_folder_path):
         """save the given data to a file
 
         Args:
@@ -37,7 +36,7 @@ class processingExperimentalData():
         """
         col = list(data.columns)
 
-        data.to_csv(self.output_folder_path, header = col, index=None, sep='\t', mode='w')
+        data.to_csv(output_folder_path, header = col, index=None, sep='\t', mode='w')
 
     def how_many_periods(self, data, freq):
         """Calculates the number of periods of AC input spaned by the data
