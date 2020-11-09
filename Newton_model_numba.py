@@ -462,23 +462,8 @@ class wrappedNewton(pints.ForwardModel):
 
     def simulate(self, parameters, times):
         """ See :meth:`pints.ForwardModel.simulate()`. """
-        # t = np.load(self.timeslocation)
-        # print('times file path: ', self.timeslocation)
         i = self._simulate(parameters, times, False)
-        #logged = np.log10(output)
-        #only returns Fourier transformed observable parameters which is current
-        #I = np.asarray(logged)
-        # I = np.asarray(output)
         return i
-
-    # def simulate_all(self, parameters, times):
-    #     """
-    #     Runs a simulation and returns all state variables, including the ones
-    #     that do no have a physically observable counterpart.
-    #     """
-    #     output = self._simulate(parameters, times, False)
-
-    #     return self._simulate(parameters, times, False)
 
     def simulate_raw_current(self, parameters, times):
                 
@@ -549,12 +534,12 @@ class wrappedNewton(pints.ForwardModel):
         param: Data data to Fourier transform and reduce
         return: numpy array contain fourier transformed data for harmonics 3 -12
         """
-        freq_org = np.fft.fftfreq(times.shape[-1], d= times[1])
+        freq_org = np.fft.fftfreq(times.shape[0], d= self.timeStepSize)
         freq=freq_org[:self.half_of_measuremnts]
         freq = freq[self.initaldiscard:self.half_of_measuremnts - self.enddiscard] # reducing to harmonics 4 - 12
         return freq
     
-    def harmonic_spacing(self, experimental_data, exp_times = None):
+    def harmonic_spacing(self, experimental_data, exp_times, adjustment: int = -1):
         """caculates the spacing between individual harmonics of the FT current
 
         Args:
@@ -568,24 +553,23 @@ class wrappedNewton(pints.ForwardModel):
         full_sim = np.fft.fft(experimental_data)
         half_full_sim = full_sim[:self.half_of_measuremnts]
 
-        spacing = np.argmax(half_full_sim)
-        print('arg max give : ', spacing)
-        print('spacing bewteen harmonics is therefore : ', spacing-1)
-        real_spacing = np.argmax(half_full_sim.real)
-        print('real arg max give : ', spacing)
-        print('real_spacing bewteen harmonics is therefore : ', real_spacing-1)
-        absolute_spacing = np.argmax(np.absolute(half_full_sim))
-        print('absolute arg max give : ', absolute_spacing)
-        print('absolute spacing bewteen harmonics is therefore : ', absolute_spacing-1)
-        imag_spacing = np.argmax(half_full_sim.imag)
-        print('imag arg max give : ', spacing)
-        print('imag_spacing bewteen harmonics is therefore : ', imag_spacing-1)
+        freq_org = np.fft.fftfreq(exp_times.shape[0], d= self.timeStepSize)
+        freq_org=freq_org[:self.half_of_measuremnts]
+
+        x = np.where(freq_org < self.freq)
+        print('x[0][-1]: ', x[0][-1])
+        spacing = x[0][-1]
+
+        y = np.where(freq_org > self.freq)
+        print('y[0][0]: ', y[0][0])
+
+        z = np.where(freq_org == self.freq)
+        print('z[0]: ', z[0])
+
         low = spacing - 80
         upper = spacing + 81
 
         if exp_times is not None:
-            freq_org = np.fft.fftfreq(exp_times.shape[-1], d= exp_times[1])
-            freq_org=freq_org[:self.half_of_measuremnts]
             xaxislabel = "frequency/Hz" # "potential/V"
 
             plt.figure(figsize=(18,10))
@@ -597,26 +581,24 @@ class wrappedNewton(pints.ForwardModel):
             plt.legend(loc='best')
             plt.show()
 
-            plot_point = spacing - 1
-            real_plot_point = real_spacing - 1
-            absolute_plot_point = absolute_spacing - 1
-            imag_plot_point = imag_spacing - 1
+            spacing_x = x[0][-1] +adjustment
+            spacing_y = y[0][0] +adjustment
 
             plt.figure(figsize=(18,10))
             plt.title("experimental FT harmonic 1 and mid point (max)")
             plt.ylabel("amplituide")
             plt.xlabel(xaxislabel)
             plt.plot(freq_org[low:upper], np.log10(half_full_sim[low:upper]),'r', label='experimental_harmonic 1')
-            plt.plot(freq_org[plot_point], np.log10(half_full_sim[plot_point]),'kX', label='maximum')
-            plt.plot(freq_org[real_plot_point], np.log10(half_full_sim[real_plot_point]),'yX', label='real maximum')
-            plt.plot(freq_org[absolute_plot_point], np.log10(half_full_sim[absolute_plot_point]),'cX', label='absoulute maximum')
-            plt.plot(freq_org[imag_plot_point], np.log10(half_full_sim[imag_plot_point]),'mX', label='imag maximum')
-            plt.plot(freq_org[absolute_plot_point +1], np.log10(half_full_sim[absolute_plot_point+1]),'gX', label='absoulute maximum+1')
+            plt.plot(freq_org[spacing_x], np.log10(half_full_sim[spacing_x]),'kX', label='spacing_x')
+            plt.plot(freq_org[spacing_y], np.log10(half_full_sim[spacing_y]),'yX', label='spacing_y')
+            if z[0] is not None:
+                spacing_z =z[0]
+                plt.plot(freq_org[spacing_z], np.log10(half_full_sim[spacing_z]),'cX', label='spacing_z')
             plt.legend(loc='best')
             plt.show()
         # change as approriate
         # was orginally -1
-        return int(spacing+1)
+        return int(spacing_x)
 
     def index_distance_covering(self, Hz_interval, exp_times):
         """number of indexs needed to span the frequency interval Hz_interal
@@ -629,7 +611,7 @@ class wrappedNewton(pints.ForwardModel):
             float: number of frequency steps (indexs) spaning the Hz interval 
         """
 
-        freq_org = np.fft.fftfreq(exp_times.shape[-1], d= exp_times[1])
+        freq_org = np.fft.fftfreq(exp_times.shape[0], d= exp_times[1])
 
         return Hz_interval/freq_org[1]
 
@@ -654,8 +636,11 @@ class wrappedNewton(pints.ForwardModel):
         print('*'*10+'cacluating harmonic spacing'+'*'*10)
         spacing = self.harmonic_spacing(experimental_data, times)
         print('Spacing between harmonics: ', spacing)
+
+        # FIXME: issue finding location of 4th harmonic mid point
         print('\n'+'*'*10+'cacluating location of 4th harmonic'+'*'*10)
-        mid_point_index = np.argmax(FT_reduced_exp)
+        x = np.where(freq < self.freq*4)
+        mid_point_index = x[0][-1] - 4
         print('mid point index of 4th harmonic: ', mid_point_index)
         print('\n'+'*'*10+'index distance of ' + str(Hz_interval) + 'Hz'+'*'*10)
         index_window = self.index_distance_covering(Hz_interval, times)
@@ -685,7 +670,7 @@ class wrappedNewton(pints.ForwardModel):
 
             temp = self.get_non_dimensionality_constants()
 
-            I0 = temp[-1]
+            I0 = temp[2]
             
             while high <= dims[0]:
                 sim_plot = Ft_reduced_sim[low:high]

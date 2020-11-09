@@ -232,6 +232,7 @@ class newtonRaphsonCap():
     def solve(self, times):
         '''Steps through and solves the system
         '''
+        # print('In base python simulator')
         t = times[1:]
         # non dimensioanless times
         t=t/self.T0
@@ -239,8 +240,10 @@ class newtonRaphsonCap():
         self.i[0] = self.I_inital/self.I0
         index = 1
         for time in t:
+            # print('find_epsilon')
             self.find_epsilon(time, index)
             # finding current at next time step
+            # print('analytical_current_solution')
             self.analytical_current_solution(time, index)
             index = index + 1
         
@@ -248,7 +251,7 @@ class newtonRaphsonCap():
 
 
 class wrappedNewtonCap(pints.ForwardModel):
-    def __init__(self, times: float, startPotential: float = -0.15, revPotential: float = -0.75, rateOfPotentialChange: float = -22.35e-3,
+    def __init__(self, times: float, removed_measures_to_account_for: int, startPotential: float = -0.15, revPotential: float = -0.75, rateOfPotentialChange: float = -22.35e-3,
                 inital_current: float = 6.620541e-07, freq: float = 8.95931721948, deltaepislon: float = 150E-3,
                 electrode_area: float = 0.03, electode_coverage: float = 6.5e-12, beingPureCapitanceto: float = 0.2,
                 endPureCapatianceFor: float = 0.2):
@@ -270,7 +273,7 @@ class wrappedNewtonCap(pints.ForwardModel):
         print('self.beingPureCapitanceto: ',self.beingPureCapitanceto)
 
 
-        self.endCap = self.numberOfMeasurements - self.endPureCapatianceFor
+        self.endCap = self.numberOfMeasurements - self.endPureCapatianceFor + int(removed_measures_to_account_for)
 
         self.midCapLow = int(self.numberOfMeasurements/2)-self.endPureCapatianceFor
         self.midCaphigh = int(self.numberOfMeasurements/2)+self.beingPureCapitanceto
@@ -325,7 +328,6 @@ class wrappedNewtonCap(pints.ForwardModel):
                                   electode_coverage=self.electode_coverage)
 
         solver.set_capacitance_params(parameters)
-
         # solving using newtonRaphsonFT
         i = solver.solve(times)
 
@@ -338,9 +340,12 @@ class wrappedNewtonCap(pints.ForwardModel):
 
     def simulate(self, parameters, times):
         """ See :meth:`pints.ForwardModel.simulate()`. """
-        
+
+        # print('solving')
         i = self._simulate(parameters, times, False)
         I = np.asarray(i)
+        # print('passing to optimiser')
+
         return I
 
     def simulate_fitting_regions(self, parameters, times):
