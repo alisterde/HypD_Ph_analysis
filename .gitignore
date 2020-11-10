@@ -139,3 +139,4 @@ Data/processed/old_current
 
 # ignoring all plots to reduce pushes
 *.png
+*.pdf
