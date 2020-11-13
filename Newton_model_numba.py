@@ -51,10 +51,14 @@ spec = [
     ('theta_X_Initial', float64),
     ('theta_Z_Initial', float64),
     ('I_inital', float64),
-    ('gamma', float64),
+    ('gamma0', float64),
     ('gamma1', float64),
     ('gamma2', float64),
-    ('gamma3', float64)
+    ('gamma3', float64),
+    ('gamma4', float64),
+    ('gamma5', float64),
+    ('gamma6', float64),
+    ('gamma7', float64)
 ]
 
 @jitclass(spec)
@@ -141,10 +145,14 @@ class newtonRaphsonFT():
 
 
         # capacitance parameters
-        self.gamma = 0.0
-        self.gamma1 =  0.0
-        self.gamma2 =   0.0
+        self.gamma0 = 0.0
+        self.gamma1 = 0.0
+        self.gamma2 = 0.0
         self.gamma3 = 0.0
+        self.gamma4 = 0.0
+        self.gamma5 = 0.0
+        self.gamma6 = 0.0
+        self.gamma7 = 0.0
 
 
     def find_epsilon(self,time: float, index: int):
@@ -195,32 +203,48 @@ class newtonRaphsonFT():
         solving the current function described in ref [1] rearraged to equal zero 
         note the backwards euler is used for di/dT
         '''
-        gamma = self.gamma
-        gamma1 =  self.gamma1
-        gamma2 = self.gamma2
-        gamma3 = self.gamma3
 
         dtheta_X_dt = self.dtheta_X_dt[index]
         dtheta_Z_dt = self.dtheta_Z_dt[index]
 
         if abs(self.T0) == self.T0:
             if t < self.dimlessRevT:
+                # capacitance polynomial before dc current reversal
+                gamma0 = self.gamma0
+                gamma1 =  self.gamma1
+                gamma2 = self.gamma2
+                gamma3 = self.gamma3
                 # epsilon before dc current reversal
                 depsilon_rdt = 1.0 + self.omega*(self.deltaepislon)*math.cos(self.omega*t + self.mew) -(self.row*(i_n1 - i_n ))/self.dimlessTimeStepSize
             elif t >= self.dimlessRevT:
-            # epsilon after dc current reversal
+                # capacitance polynomial after dc current reversal
+                gamma0 = self.gamma4
+                gamma1 =  self.gamma5
+                gamma2 = self.gamma6
+                gamma3 = self.gamma7
+                # epsilon after dc current reversal
                 depsilon_rdt = -1.0 + self.omega*(self.deltaepislon)*math.cos(self.omega*t + self.mew) -(self.row*(i_n1 - i_n ))/self.dimlessTimeStepSize
         else:
             # taking into account changes in logic if T0 is negative 
             if t > self.dimlessRevT:
+                # capacitance polynomial before dc current reversal
+                gamma0 = self.gamma0
+                gamma1 =  self.gamma1
+                gamma2 = self.gamma2
+                gamma3 = self.gamma3
                 # epsilon before dc current reversal
                 depsilon_rdt = 1.0 + self.omega*(self.deltaepislon)*math.cos(self.omega*t + self.mew) -(self.row*(i_n1 - i_n ))/self.dimlessTimeStepSize
             elif t <= self.dimlessRevT:
+                # capacitance polynomial after dc current reversal
+                gamma0 = self.gamma4
+                gamma1 =  self.gamma5
+                gamma2 = self.gamma6
+                gamma3 = self.gamma7
                 # epsilon after dc current reversal
                 depsilon_rdt = -1.0 + self.omega*(self.deltaepislon)*math.cos(self.omega*t + self.mew) -(self.row*(i_n1 - i_n ))/self.dimlessTimeStepSize
         
 
-        return(-i_n1 + (gamma + gamma1*self.epsilon_r + gamma2*math.pow(self.epsilon_r, 2.0 ) + gamma3*math.pow(self.epsilon_r, 3.0 ))*depsilon_rdt 
+        return(-i_n1 + (gamma0 + gamma1*self.epsilon_r + gamma2*math.pow(self.epsilon_r, 2.0 ) + gamma3*math.pow(self.epsilon_r, 3.0 ))*depsilon_rdt 
                 + self.zeta*(dtheta_X_dt - dtheta_Z_dt))
 
     
@@ -228,31 +252,47 @@ class newtonRaphsonFT():
         ''' solving the differential WRT i current function described in ref [1] rearraged to equal zero 
             note the backwards euler is used for di/dT
         '''
-        gamma = self.gamma
-        gamma1 = self.gamma1
-        gamma2 = self.gamma2
-        gamma3 = self.gamma3
-
+        
         if abs(self.T0) == self.T0:
             if t < self.dimlessRevT:
+                # capacitance polynomial before dc current reversal
+                gamma0 = self.gamma0
+                gamma1 =  self.gamma1
+                gamma2 = self.gamma2
+                gamma3 = self.gamma3
                 # epsilon before dc current reversal
                 depsilon_rdt = 1.0 + self.omega*(self.deltaepislon)*math.cos(self.omega*t + self.mew) -(self.row*(i_n1 - i_n ))/self.dimlessTimeStepSize
             elif t >= self.dimlessRevT:
-            # epsilon after dc current reversal
+                # capacitance polynomial after dc current reversal
+                gamma0 = self.gamma4
+                gamma1 =  self.gamma5
+                gamma2 = self.gamma6
+                gamma3 = self.gamma7
+                # epsilon after dc current reversal
                 depsilon_rdt = -1.0 + self.omega*(self.deltaepislon)*math.cos(self.omega*t + self.mew) -(self.row*(i_n1 - i_n ))/self.dimlessTimeStepSize
         else:
             # taking into account changes in logic if T0 is negative 
             if t > self.dimlessRevT:
+                # capacitance polynomial before dc current reversal
+                gamma0 = self.gamma0
+                gamma1 =  self.gamma1
+                gamma2 = self.gamma2
+                gamma3 = self.gamma3
                 # epsilon before dc current reversal
                 depsilon_rdt = 1.0 + self.omega*(self.deltaepislon)*math.cos(self.omega*t + self.mew) -(self.row*(i_n1 - i_n ))/self.dimlessTimeStepSize
             elif t <= self.dimlessRevT:
+                # capacitance polynomial after dc current reversal
+                gamma0 = self.gamma4
+                gamma1 =  self.gamma5
+                gamma2 = self.gamma6
+                gamma3 = self.gamma7
                 # epsilon after dc current reversal
                 depsilon_rdt = -1.0 + self.omega*(self.deltaepislon)*math.cos(self.omega*t + self.mew) -(self.row*(i_n1 - i_n ))/self.dimlessTimeStepSize
         
         d2epsilon_rdidt = -self.row/self.dimlessTimeStepSize
 
         return(-1.0 + (-gamma1*self.row - 2.0*gamma2*self.row*(self.epsilon - self.row*i_n1) - 3.0*gamma3*self.row*math.pow((self.epsilon - self.row*i_n1),2.0))*depsilon_rdt 
-                + (gamma + gamma1*self.epsilon_r + gamma2*math.pow(self.epsilon_r, 2.0 ) + gamma3*math.pow(self.epsilon_r, 3.0 ))*d2epsilon_rdidt)
+                + (gamma0 + gamma1*self.epsilon_r + gamma2*math.pow(self.epsilon_r, 2.0 ) + gamma3*math.pow(self.epsilon_r, 3.0 ))*d2epsilon_rdidt)
 
     
     def newton_raphson(self, time, index: int):
@@ -325,11 +365,15 @@ class newtonRaphsonFT():
         #     cap_params = self.suggested_capacitance_params()
 
         non_dimensiosation_constant = self.E0*self.s/(self.T0*self.I0)
-        self.gamma = (cap_params[0]*non_dimensiosation_constant)
+        self.gamma0 = (cap_params[0]*non_dimensiosation_constant)
         self.gamma1 = (cap_params[1]*self.E0)*non_dimensiosation_constant
         self.gamma2 = (cap_params[2]*math.pow(self.E0,2.0))*non_dimensiosation_constant
         self.gamma3 = (cap_params[3]*math.pow(self.E0,3.0))*non_dimensiosation_constant
-        self.omega = (cap_params[4])
+        self.gamma4 = (cap_params[4]*non_dimensiosation_constant)
+        self.gamma5 = (cap_params[5]*self.E0)*non_dimensiosation_constant
+        self.gamma6 = (cap_params[6]*math.pow(self.E0,2.0))*non_dimensiosation_constant
+        self.gamma7 = (cap_params[7]*math.pow(self.E0,3.0))*non_dimensiosation_constant
+        self.omega = (cap_params[8])
 
 
     def solve(self, times: float64):
@@ -365,7 +409,8 @@ class wrappedNewton(pints.ForwardModel):
     def __init__(self, times: float, inital_current: float = 6.620541e-07, freq: float = 8.95931721948, startPotential: float = -0.15, revPotential: float = -0.75,
                  rateOfPotentialChange: float = -22.35e-3, deltaepislon: float = 150E-3, uncomp_resis: float = 27.160770551,
                  electrode_area: float = 0.03, electode_coverage: float = 6.5e-12,initaldiscard: float = 0.025, enddiscard: float = 0.875,
-                 cap_params: tuple = (1.13465158675681913e-04, 1.71228672908262905e-06, -2.02632468231267758e-05, -6.41028656277626023e-05, -6.47083954113886932e+01)):
+                 cap_params: tuple = (1.13465158675681913e-04, 1.71228672908262905e-06, -2.02632468231267758e-05, -6.41028656277626023e-05,
+                                      1.13465158675681913e-04, 1.71228672908262905e-06, -2.02632468231267758e-05, -6.41028656277626023e-05, -6.47083954113886932e+01)):
 
         self.inital_current = inital_current
         self.freq = freq
@@ -391,7 +436,11 @@ class wrappedNewton(pints.ForwardModel):
         self.gamma1 = cap_params[1]
         self.gamma2 = cap_params[2]
         self.gamma3 = cap_params[3]
-        self.omega = cap_params[4]
+        self.gamma4 = cap_params[4]
+        self.gamma5 = cap_params[5]
+        self.gamma6 = cap_params[6]
+        self.gamma7 = cap_params[7]
+        self.omega = cap_params[8]
         
     def n_outputs(self):
         """ 
@@ -435,12 +484,6 @@ class wrappedNewton(pints.ForwardModel):
         params.append(parameters[3]/solver.E0) # E0_2
         params.append(parameters[4]) # phase is demnsionless
         params.append(parameters[5]*(solver.F*solver.s*solver.GAMMA/(solver.T0*solver.I0))) # zeta
-        # nondimensionalsing parameter for capacitance
-        # self.gamma0 = (parameters[6]*self.E0/(self.T0*self.I0))
-        # self.gamma1 = parameters[7]*self.E0
-        # self.gamma2 = parameters[8]*math.pow(self.E0,2.0)
-        # self.gamma3 = parameters[9]*math.pow(self.E0,3.0)
-        # self.omega = 2.0*math.pi*self.freq*self.T0 # dimensionless omega
         params = np.asarray(params)
 
         solver.set_faradaic_parameters(params)
@@ -497,7 +540,8 @@ class wrappedNewton(pints.ForwardModel):
         """Returns a list with suggestsed capacitance parameters for the model with dimension
         return: [gamma0, gamma1, gamma2, gamma3, omega]
         """
-        return [self.gamma0, self.gamma1, self.gamma2, self.gamma3, self.omega]
+        return [self.gamma0, self.gamma1, self.gamma2, self.gamma3,
+                self.gamma4, self.gamma5, self.gamma6, self.gamma7, self.omega]
 
     def get_non_dimensionality_constants(self):
         """ Helper function to obtain the non dimensionality constants from the base Python class
@@ -617,7 +661,7 @@ class wrappedNewton(pints.ForwardModel):
 
 
     def ploting_harmonic(self, experimental_data, times, parameter_for_sim, print_these_harmonics = None, Hz_interval = 1.5, print_harmonics = True,
-                         check_FT_harmonic_locations = False, print_all_harmonics = True, print_simulated_harmonics_alone = False):
+                         check_FT_harmonic_locations = False, print_all_harmonics = True, print_simulated_harmonics_alone = False, save_to = None):
         """ploting harmonics of data against simulated harmonics
 
         Args:
@@ -634,13 +678,13 @@ class wrappedNewton(pints.ForwardModel):
         # 4th harmonic centered at 303
         # should be seprated by ~ 480 measurements
         print('*'*10+'cacluating harmonic spacing'+'*'*10)
-        spacing = self.harmonic_spacing(experimental_data, times)
+        spacing = self.harmonic_spacing(experimental_data, times, adjustment=-1)
         print('Spacing between harmonics: ', spacing)
 
         # FIXME: issue finding location of 4th harmonic mid point
         print('\n'+'*'*10+'cacluating location of 4th harmonic'+'*'*10)
         x = np.where(freq < self.freq*4)
-        mid_point_index = x[0][-1] - 4
+        mid_point_index = x[0][-1] -4
         print('mid point index of 4th harmonic: ', mid_point_index)
         print('\n'+'*'*10+'index distance of ' + str(Hz_interval) + 'Hz'+'*'*10)
         index_window = self.index_distance_covering(Hz_interval, times)
@@ -656,12 +700,12 @@ class wrappedNewton(pints.ForwardModel):
         if print_harmonics is True:
             dims = freq.shape
             self._ploting_ifft_haromics(mid_point_index, index_window, spacing, dims, Ft_reduced_sim, FT_reduced_exp,
-                                        print_simulated_harmonics_alone, print_all_harmonics, print_these_harmonics)
+                                        print_simulated_harmonics_alone, print_all_harmonics, print_these_harmonics, save_to)
 
 
 
     def _ploting_ifft_haromics(self, mid_point_index, index_window, spacing, dims, Ft_reduced_sim, FT_reduced_exp,
-                               print_simulated_harmonics_alone, print_all_harmonics, print_these_harmonics):
+                               print_simulated_harmonics_alone, print_all_harmonics, print_these_harmonics, save_to):
 
             harmonic = 4
             low = int(mid_point_index - index_window)
@@ -700,7 +744,15 @@ class wrappedNewton(pints.ForwardModel):
                         plt.ylabel("current/Amps")
                         plt.plot(sim_harmonic.real,'r', label='Real Simulated Harmonic '+str(harmonic))
                         plt.plot(sim_harmonic.imag,'r', linestyle='dashed', label='Imaginary Simulated Harmonic '+str(harmonic))
+                        plt.tick_params(
+                                        axis='x',          # changes apply to the x-axis
+                                        which='both',      # both major and minor ticks are affected
+                                        bottom=False,      # ticks along the bottom edge are off
+                                        top=False,         # ticks along the top edge are off
+                                        labelbottom=False) 
                         plt.legend(loc='best')
+                        if save_to is not None:
+                             plt.savefig(os.path.join(save_to, 'Just_simulated_harmonic_' + str(harmonic)+'.pdf'))
                         plt.show()
 
                 if print_all_harmonics is True or harmonic in print_these_harmonics:
@@ -712,7 +764,15 @@ class wrappedNewton(pints.ForwardModel):
                     plt.plot(sim_harmonic.real,'r', label='Real Simulated Harmonic '+str(harmonic))
                     plt.plot(exp_harmonic.imag,'b', linestyle='dashed', label='Imaginary Experimental Harmonic '+str(harmonic))
                     plt.plot(sim_harmonic.imag,'r', linestyle='dashed', label='Imaginary Simulated Harmonic '+str(harmonic))
+                    plt.tick_params(
+                                    axis='x',          # changes apply to the x-axis
+                                    which='both',      # both major and minor ticks are affected
+                                    bottom=False,      # ticks along the bottom edge are off
+                                    top=False,         # ticks along the top edge are off
+                                    labelbottom=False) 
                     plt.legend(loc='best')
+                    if save_to is not None:
+                             plt.savefig(os.path.join(save_to, 'Simulated_on_experimental_harmonic '+str(harmonic)+'.pdf'))
                     plt.show()
 
                     plt.figure(figsize=(18,10))
@@ -721,6 +781,14 @@ class wrappedNewton(pints.ForwardModel):
                     plt.plot(np.absolute(exp_harmonic),'b', label='Absolute Experimental Harmonic '+str(harmonic))
                     plt.plot(np.absolute(sim_harmonic),'r', label='Absolute Simulated Harmonic '+str(harmonic))
                     plt.legend(loc='best')
+                    plt.tick_params(
+                                        axis='x',          # changes apply to the x-axis
+                                        which='both',      # both major and minor ticks are affected
+                                        bottom=False,      # ticks along the bottom edge are off
+                                        top=False,         # ticks along the top edge are off
+                                        labelbottom=False) 
+                    if save_to is not None:
+                             plt.savefig(os.path.join(save_to, 'Absolute_simulated_on_experimental_harmonic '+str(harmonic)+'.pdf'))
                     plt.show()
 
 
@@ -765,6 +833,12 @@ class wrappedNewton(pints.ForwardModel):
                 plt.plot(xaxis_mid_upper[1:], np.log10(mid_upper_sim_plot[1:]),'k', label='simulated_harmonic_'+str(harmonic)+'_upper_1/2')
                 plt.plot(xaxis_lower, np.log10(lower_sim_plot),'m', label='simulated_harmonic_'+str(harmonic)+'_lower_1/2')
                 plt.plot(freq[mid], np.log10(Ft_reduced_sim[mid]),'cX', label='harmonic_center')
+                plt.tick_params(
+                                axis='x',          # changes apply to the x-axis
+                                which='both',      # both major and minor ticks are affected
+                                bottom=False,      # ticks along the bottom edge are off
+                                top=False,         # ticks along the top edge are off
+                                labelbottom=False) 
                 plt.legend(loc='best')
                 plt.show()
 
@@ -776,6 +850,12 @@ class wrappedNewton(pints.ForwardModel):
                 plt.plot(xaxis_mid_upper[1:], np.log10(mid_upper_exp_plot[1:]),'k', label='experimental_harmonic_'+str(harmonic)+'_upper_1/2')
                 plt.plot(xaxis_lower, np.log10(lower_exp_plot),'m', label='experimental_harmonic_'+str(harmonic)+'_lower_1/2')
                 plt.plot(freq[mid], np.log10(FT_reduced_exp[mid]),'cX', label='harmonic_center')
+                plt.tick_params(
+                                axis='x',          # changes apply to the x-axis
+                                which='both',      # both major and minor ticks are affected
+                                bottom=False,      # ticks along the bottom edge are off
+                                top=False,         # ticks along the top edge are off
+                                labelbottom=False) 
                 plt.legend(loc='best')
                 plt.show()
 
@@ -785,6 +865,12 @@ class wrappedNewton(pints.ForwardModel):
                 plt.xlabel(xaxislabel)
                 plt.plot(freq, np.log10(FT_reduced_exp),'b', label='experimental_data')
                 plt.plot(xaxis, np.log10(sim_plot),'r', label='simulated_harmonic_'+str(harmonic))
+                plt.tick_params(
+                                axis='x',          # changes apply to the x-axis
+                                which='both',      # both major and minor ticks are affected
+                                bottom=False,      # ticks along the bottom edge are off
+                                top=False,         # ticks along the top edge are off
+                                labelbottom=False) 
                 plt.legend(loc='best')
                 plt.show()
 

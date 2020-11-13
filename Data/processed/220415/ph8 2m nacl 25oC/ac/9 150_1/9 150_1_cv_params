@@ -15,3 +15,10 @@ post_voltage 0.000
 post_time 0.000
 freq 8.941
 amp 150.000
+
+
+inital_current = exp_current[0]
+freq = 8.977950e+00
+startPotential= -250.0E-3
+revPotential = -850.0E-3
+rateOfPotentialChange = -22.35174e-3

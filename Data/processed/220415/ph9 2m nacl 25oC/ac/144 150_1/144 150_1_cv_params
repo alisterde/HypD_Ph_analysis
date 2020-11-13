@@ -1,0 +1,27 @@
+cvsin_parameters
+type sine
+start -300.000
+end -300.000
+max -300.000
+min -900.000
+rate 22.352
+scans 
+direction a
+initial_voltage -300.000
+initial_time 1000.000
+pre_voltage 0.000
+pre_time 0.000
+post_voltage 0.000
+post_time 0.000
+freq 143.908
+amp 150.000
+
+inital_current = exp_current[0]
+freq = 1.439266e+02
+startPotential= -300.0E-3
+revPotential = -900.0E-3
+rateOfPotentialChange = -22.35174e-3
+
+deltaepislon = 150.0E-3
+electrode_area = 0.03
+electode_coverage = 6.5e-12

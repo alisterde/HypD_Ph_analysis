@@ -37,10 +37,14 @@ spec = [
     ('dimlessTimeStepSize', float64),
     ('i', float64[:]),
     ('I_inital', float64),
-    ('gamma', float64),
+    ('gamma0', float64),
     ('gamma1', float64),
     ('gamma2', float64),
-    ('gamma3', float64)
+    ('gamma3', float64),
+    ('gamma4', float64),
+    ('gamma5', float64),
+    ('gamma6', float64),
+    ('gamma7', float64)
 ]
 
 @jitclass(spec)
@@ -98,11 +102,17 @@ class newtonRaphsonCap():
 
         self.I_inital = inital_current
 
-        # capacitance parameters
-        self.gamma = 0.0
+        # capacitance parameters for forward sweep
+        self.gamma0 = 0.0
         self.gamma1 =  0.0
         self.gamma2 =   0.0
         self.gamma3 = 0.0
+
+        # capacitance parameters for reverse sweep
+        self.gamma4 = 0.0
+        self.gamma5 =  0.0
+        self.gamma6 =   0.0
+        self.gamma7 = 0.0
 
 
     def find_epsilon(self,time: float, index: int):
@@ -132,60 +142,92 @@ class newtonRaphsonCap():
         solving the current function described in ref [1] rearraged to equal zero 
         note the backwards euler is used for di/dT
         '''
-        gamma = self.gamma
-        gamma1 =  self.gamma1
-        gamma2 = self.gamma2
-        gamma3 = self.gamma3
 
         if abs(self.T0) == self.T0:
             if t < self.dimlessRevT:
+                # capacitance polynomial before dc current reversal
+                gamma0 = self.gamma0
+                gamma1 =  self.gamma1
+                gamma2 = self.gamma2
+                gamma3 = self.gamma3
                 # epsilon before dc current reversal
                 depsilon_rdt = 1.0 + self.omega*(self.deltaepislon)*math.cos(self.omega*t + self.mew) -(self.row*(i_n1 - i_n ))/self.dimlessTimeStepSize
             elif t >= self.dimlessRevT:
-            # epsilon after dc current reversal
+                # capacitance polynomial after dc current reversal
+                gamma0 = self.gamma4
+                gamma1 =  self.gamma5
+                gamma2 = self.gamma6
+                gamma3 = self.gamma7
+                # epsilon after dc current reversal
                 depsilon_rdt = -1.0 + self.omega*(self.deltaepislon)*math.cos(self.omega*t + self.mew) -(self.row*(i_n1 - i_n ))/self.dimlessTimeStepSize
         else:
             # taking into account changes in logic if T0 is negative 
             if t > self.dimlessRevT:
+                # capacitance polynomial before dc current reversal
+                gamma0 = self.gamma0
+                gamma1 =  self.gamma1
+                gamma2 = self.gamma2
+                gamma3 = self.gamma3
                 # epsilon before dc current reversal
                 depsilon_rdt = 1.0 + self.omega*(self.deltaepislon)*math.cos(self.omega*t + self.mew) -(self.row*(i_n1 - i_n ))/self.dimlessTimeStepSize
             elif t <= self.dimlessRevT:
+                # capacitance polynomial after dc current reversal
+                gamma0 = self.gamma4
+                gamma1 =  self.gamma5
+                gamma2 = self.gamma6
+                gamma3 = self.gamma7
                 # epsilon after dc current reversal
                 depsilon_rdt = -1.0 + self.omega*(self.deltaepislon)*math.cos(self.omega*t + self.mew) -(self.row*(i_n1 - i_n ))/self.dimlessTimeStepSize
         
 
-        return(-i_n1 + (gamma + gamma1*self.epsilon_r + gamma2*math.pow(self.epsilon_r, 2.0 ) + gamma3*math.pow(self.epsilon_r, 3.0 ))*depsilon_rdt)
+        return(-i_n1 + (gamma0 + gamma1*self.epsilon_r + gamma2*math.pow(self.epsilon_r, 2.0 ) + gamma3*math.pow(self.epsilon_r, 3.0 ))*depsilon_rdt)
 
     
     def deriv_current_function(self,i_n, t, i_n1):
         ''' solving the differential WRT i current function described in ref [1] rearraged to equal zero 
             note the backwards euler is used for di/dT
         '''
-        gamma = self.gamma
-        gamma1 = self.gamma1
-        gamma2 = self.gamma2
-        gamma3 = self.gamma3
 
         if abs(self.T0) == self.T0:
             if t < self.dimlessRevT:
+                # capacitance polynomial before dc current reversal
+                gamma0 = self.gamma0
+                gamma1 =  self.gamma1
+                gamma2 = self.gamma2
+                gamma3 = self.gamma3
                 # epsilon before dc current reversal
                 depsilon_rdt = 1.0 + self.omega*(self.deltaepislon)*math.cos(self.omega*t + self.mew) -(self.row*(i_n1 - i_n ))/self.dimlessTimeStepSize
             elif t >= self.dimlessRevT:
-            # epsilon after dc current reversal
+                # capacitance polynomial after dc current reversal
+                gamma0 = self.gamma4
+                gamma1 =  self.gamma5
+                gamma2 = self.gamma6
+                gamma3 = self.gamma7
+                # epsilon after dc current reversal
                 depsilon_rdt = -1.0 + self.omega*(self.deltaepislon)*math.cos(self.omega*t + self.mew) -(self.row*(i_n1 - i_n ))/self.dimlessTimeStepSize
         else:
             # taking into account changes in logic if T0 is negative 
             if t > self.dimlessRevT:
+                # capacitance polynomial before dc current reversal
+                gamma0 = self.gamma0
+                gamma1 =  self.gamma1
+                gamma2 = self.gamma2
+                gamma3 = self.gamma3
                 # epsilon before dc current reversal
                 depsilon_rdt = 1.0 + self.omega*(self.deltaepislon)*math.cos(self.omega*t + self.mew) -(self.row*(i_n1 - i_n ))/self.dimlessTimeStepSize
             elif t <= self.dimlessRevT:
+                # capacitance polynomial after dc current reversal
+                gamma0 = self.gamma4
+                gamma1 =  self.gamma5
+                gamma2 = self.gamma6
+                gamma3 = self.gamma7
                 # epsilon after dc current reversal
                 depsilon_rdt = -1.0 + self.omega*(self.deltaepislon)*math.cos(self.omega*t + self.mew) -(self.row*(i_n1 - i_n ))/self.dimlessTimeStepSize
         
         d2epsilon_rdidt = -self.row/self.dimlessTimeStepSize
 
         return(-1.0 + (-gamma1*self.row - 2.0*gamma2*self.row*(self.epsilon - self.row*i_n1) - 3.0*gamma3*self.row*math.pow((self.epsilon - self.row*i_n1),2.0))*depsilon_rdt 
-                + (gamma + gamma1*self.epsilon_r + gamma2*math.pow(self.epsilon_r, 2.0 ) + gamma3*math.pow(self.epsilon_r, 3.0 ))*d2epsilon_rdidt)
+                + (gamma0 + gamma1*self.epsilon_r + gamma2*math.pow(self.epsilon_r, 2.0 ) + gamma3*math.pow(self.epsilon_r, 3.0 ))*d2epsilon_rdidt)
 
     
     def analytical_current_solution(self, time, index: int):
@@ -210,23 +252,25 @@ class newtonRaphsonCap():
 
         self.i[index] = x1
 
-    def set_capacitance_params(self, cap_params = None):
+    def set_capacitance_params(self, cap_params):
         '''
         takes a list of capasiance parameters and sets these for the model
-        :param: cap_params = [gamma0, gamma1, gamma2, gamma3, omega]
-        defaults to[0.0001411712994, 0.0195931114228, 0.000639515427465, 6.94671729801e-06, 2.0*math.pi*self.freq*self.T0]
+        :param: cap_params = [gamma0, gamma1, gamma2, gamma3, gamma4,
+                              gamma5, gamma6, gamma7, omega, mew, row]
         '''
-        # if cap_params == None:
-        #     cap_params = self.suggested_capacitance_params()
 
         non_dimensiosation_constant = self.E0*self.s/(self.T0*self.I0)
-        self.gamma = (cap_params[0]*non_dimensiosation_constant)
+        self.gamma0 = (cap_params[0]*non_dimensiosation_constant)
         self.gamma1 = (cap_params[1]*self.E0)*non_dimensiosation_constant
         self.gamma2 = (cap_params[2]*math.pow(self.E0,2.0))*non_dimensiosation_constant
         self.gamma3 = (cap_params[3]*math.pow(self.E0,3.0))*non_dimensiosation_constant
-        self.omega = cap_params[4]
-        self.mew = cap_params[5]
-        self.row = cap_params[6]*(self.I0/self.E0)
+        self.gamma4 = (cap_params[4]*non_dimensiosation_constant)
+        self.gamma5 = (cap_params[5]*self.E0)*non_dimensiosation_constant
+        self.gamma6 = (cap_params[6]*math.pow(self.E0,2.0))*non_dimensiosation_constant
+        self.gamma7 = (cap_params[7]*math.pow(self.E0,3.0))*non_dimensiosation_constant
+        self.omega = cap_params[8]
+        self.mew = cap_params[9]
+        self.row = cap_params[10]*(self.I0/self.E0)
 
 
     def solve(self, times):
@@ -306,8 +350,9 @@ class wrappedNewtonCap(pints.ForwardModel):
         """ See :meth:`pints.ForwardModel.n_parameters()`. 
         :return: dimensions of parameter vector
         """
-        # [gamma, gamma1, gamma2, gamma3, omega, mew, uncompensated_resistance]
-        return 7
+        # [gamma0, gamma1, gamma2, gamma3, gamma4, gamma5, gamma6,
+        #  gamma7, mew, omega, uncompensated_resistance]
+        return 11
     
     def _simulate(self, parameters, times, reduce):
         """
@@ -356,7 +401,8 @@ class wrappedNewtonCap(pints.ForwardModel):
 
     def suggested_capacitance_params(self):
         """Returns a list with suggestsed capacitance parameters for the model with dimension
-        return: [gamma0, gamma1, gamma2, gamma3, omega, mew, uncompensated_resistance]
+        return: [gamma0, gamma1, gamma2, gamma3, gamma4, gamma5, gamma6,
+                 gamma7, omega, mew, uncompensated_resistance]
         """
 
         solver = newtonRaphsonCap(timeStepSize=self.timeStepSize, numberOfMeasurements=self.numberOfMeasurements,
@@ -365,13 +411,19 @@ class wrappedNewtonCap(pints.ForwardModel):
                                   freq=self.freq, deltaepislon=self.deltaepislon, electrode_area =self.electrode_area,
                                   electode_coverage=self.electode_coverage)
         
-        gamma = 0.0001411712994
-        gamma1 = gamma*0.0195931114228
-        gamma2 = gamma*0.000639515427465
-        gamma3 = gamma*6.94671729801e-06
+        gamma0 = 0.0001411712994
+        gamma1 = gamma0*0.0195931114228
+        gamma2 = gamma0*0.000639515427465
+        gamma3 = gamma0*6.94671729801e-06
+        gamma4 = 0.0001411712994
+        gamma5 = gamma4*0.0195931114228
+        gamma6 = gamma4*0.000639515427465
+        gamma7 = gamma4*6.94671729801e-06
 
-        return [gamma, gamma1, gamma2, gamma3, 2.0*math.pi*solver.freq*solver.T0, -0.031244092599793216, 27.160770551]
+        output = [gamma0, gamma1, gamma2, gamma3, gamma4, gamma5, gamma6,
+                  gamma7, 2.0*math.pi*solver.freq*solver.T0, -0.031244092599793216, 27.160770551]
 
+        return output
 
     def reshape_to_cap_regions(self, array):
 
