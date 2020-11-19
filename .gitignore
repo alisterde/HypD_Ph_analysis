@@ -140,3 +140,6 @@ Data/processed/old_current
 # ignoring all plots to reduce pushes
 *.png
 *.pdf
+
+# ignoring processed data to save memory
+*/experimental
