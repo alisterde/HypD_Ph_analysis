@@ -83,8 +83,8 @@ class newtonRaphsonCap():
         self.deltaepislon = deltaepislon/self.E0 # V 
         self.mew  = 0.0 #-0.031244092599793216 #phase
         self.freq = freq #Hz (0.11161564832 seconds per period insure data has even number of periods)
-        self.omega = 2.0*math.pi*self.freq*self.T0 # dimensionless omega
-        self.omega0 = 2.0*math.pi*self.freq*self.T0 # dimensionless omega 
+        self.omega = 2.0*math.pi*self.freq # *self.T0 # dimensionless omega
+        self.omega0 = 2.0*math.pi*self.freq# *self.T0 # dimensionless omega 
         self.epsilon = 0.0
         self.epsilon_r = 0.0
         self.row = 0.0 # 27.160770551*(self.I0/self.E0)# dimensionless uncompensated resistance
@@ -242,13 +242,16 @@ class newtonRaphsonCap():
 
         h = self.current_function(x0, time, x1)/self.deriv_current_function(x0, time, x1)
 
-        while abs(h) >= 0.00001:
+        iterations = 0
+        max_iterations = 100
+        while abs(h) >= 0.00001 and iterations <= max_iterations:
 
             h = self.current_function(x0, time, x1)/self.deriv_current_function(x0, time, x1)
 
             # x(i+1) = x(i) - f(x) / f'(x) 
 
             x1 = x1 - h
+            iterations = iterations +1
 
         self.i[index] = x1
 
@@ -268,7 +271,7 @@ class newtonRaphsonCap():
         self.gamma5 = (cap_params[5]*self.E0)*non_dimensiosation_constant
         self.gamma6 = (cap_params[6]*math.pow(self.E0,2.0))*non_dimensiosation_constant
         self.gamma7 = (cap_params[7]*math.pow(self.E0,3.0))*non_dimensiosation_constant
-        self.omega = cap_params[8]
+        self.omega = cap_params[8]*self.T0
         self.mew = cap_params[9]
         self.row = cap_params[10]*(self.I0/self.E0)
 
@@ -336,7 +339,7 @@ class wrappedNewtonCap(pints.ForwardModel):
         self.gamma3 = 0.0
         self.omega = 0.0
         self.mew = 0.0
-        self.uncomp_resis=27.160770551
+        self.uncomp_resis = 27.160770551
         
     def n_outputs(self):
         """ 
@@ -386,10 +389,8 @@ class wrappedNewtonCap(pints.ForwardModel):
     def simulate(self, parameters, times):
         """ See :meth:`pints.ForwardModel.simulate()`. """
 
-        # print('solving')
         i = self._simulate(parameters, times, False)
         I = np.asarray(i)
-        # print('passing to optimiser')
 
         return I
 

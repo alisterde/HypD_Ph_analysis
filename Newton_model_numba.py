@@ -307,7 +307,9 @@ class newtonRaphsonFT():
 
         h = self.current_function(x0, time, x1, index)/self.deriv_current_function(x0, time, x1)
 
-        while abs(h) >= 0.00001:
+        iterations = 0
+        max_iterations = 100
+        while abs(h) >= 0.00001 and iterations <= max_iterations:
 
             h = self.current_function(x0, time, x1, index)/self.deriv_current_function(x0, time, x1)
 
@@ -373,7 +375,7 @@ class newtonRaphsonFT():
         self.gamma5 = (cap_params[5]*self.E0)*non_dimensiosation_constant
         self.gamma6 = (cap_params[6]*math.pow(self.E0,2.0))*non_dimensiosation_constant
         self.gamma7 = (cap_params[7]*math.pow(self.E0,3.0))*non_dimensiosation_constant
-        self.omega = (cap_params[8])
+        self.omega = (cap_params[8])*self.T0
 
 
     def solve(self, times: float64):
@@ -678,13 +680,13 @@ class wrappedNewton(pints.ForwardModel):
         # 4th harmonic centered at 303
         # should be seprated by ~ 480 measurements
         print('*'*10+'cacluating harmonic spacing'+'*'*10)
-        spacing = self.harmonic_spacing(experimental_data, times, adjustment=-1)
+        spacing = self.harmonic_spacing(experimental_data, times, adjustment=0)
         print('Spacing between harmonics: ', spacing)
 
         # FIXME: issue finding location of 4th harmonic mid point
         print('\n'+'*'*10+'cacluating location of 4th harmonic'+'*'*10)
         x = np.where(freq < self.freq*4)
-        mid_point_index = x[0][-1] -4
+        mid_point_index = x[0][-1] +0
         print('mid point index of 4th harmonic: ', mid_point_index)
         print('\n'+'*'*10+'index distance of ' + str(Hz_interval) + 'Hz'+'*'*10)
         index_window = self.index_distance_covering(Hz_interval, times)

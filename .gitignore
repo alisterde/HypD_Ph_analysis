@@ -142,4 +142,4 @@ Data/processed/old_current
 *.pdf
 
 # ignoring processed data to save memory
-*/experimental
+experimental
