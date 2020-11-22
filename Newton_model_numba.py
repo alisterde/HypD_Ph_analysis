@@ -585,7 +585,7 @@ class wrappedNewton(pints.ForwardModel):
         freq = freq[self.initaldiscard:self.half_of_measuremnts - self.enddiscard] # reducing to harmonics 4 - 12
         return freq
     
-    def harmonic_spacing(self, experimental_data, exp_times, adjustment: int = -1):
+    def harmonic_spacing(self, experimental_data, exp_times, adjustment: int = 0):
         """caculates the spacing between individual harmonics of the FT current
 
         Args:
@@ -613,7 +613,7 @@ class wrappedNewton(pints.ForwardModel):
         print('z[0]: ', z[0])
 
         low = spacing - 80
-        upper = spacing + 81
+        upper = spacing + 80
 
         if exp_times is not None:
             xaxislabel = "frequency/Hz" # "potential/V"
@@ -663,7 +663,8 @@ class wrappedNewton(pints.ForwardModel):
 
 
     def ploting_harmonic(self, experimental_data, times, parameter_for_sim, print_these_harmonics = None, Hz_interval = 1.5, print_harmonics = True,
-                         check_FT_harmonic_locations = False, print_all_harmonics = True, print_simulated_harmonics_alone = False, save_to = None):
+                         check_FT_harmonic_locations = False, print_all_harmonics = True, print_simulated_harmonics_alone = False, save_to = None, FirstAdjustment: int = -1,
+                         FourthAdjustment: int = -4):
         """ploting harmonics of data against simulated harmonics
 
         Args:
@@ -680,13 +681,13 @@ class wrappedNewton(pints.ForwardModel):
         # 4th harmonic centered at 303
         # should be seprated by ~ 480 measurements
         print('*'*10+'cacluating harmonic spacing'+'*'*10)
-        spacing = self.harmonic_spacing(experimental_data, times, adjustment=0)
+        spacing = self.harmonic_spacing(experimental_data, times, adjustment= FirstAdjustment)
         print('Spacing between harmonics: ', spacing)
 
         # FIXME: issue finding location of 4th harmonic mid point
         print('\n'+'*'*10+'cacluating location of 4th harmonic'+'*'*10)
         x = np.where(freq < self.freq*4)
-        mid_point_index = x[0][-1] +0
+        mid_point_index = x[0][-1] + FourthAdjustment
         print('mid point index of 4th harmonic: ', mid_point_index)
         print('\n'+'*'*10+'index distance of ' + str(Hz_interval) + 'Hz'+'*'*10)
         index_window = self.index_distance_covering(Hz_interval, times)
