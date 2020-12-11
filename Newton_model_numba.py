@@ -1,7 +1,8 @@
 import math
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
-plt.rcParams.update({'font.size': 24})
+import matplotlib.ticker as mtick
 import os
 
 import pints
@@ -21,8 +22,6 @@ spec = [
     ('I0', float64),
     ('epsilon_start', float64),
     ('epsilon_reverse', float64),
-    ('potentialRange', float64[:]),
-    ('fullPotentialRange', float64[:]),
     ('deltaepislon', float64),
     ('mew', float64),
     ('freq', float64),
@@ -95,10 +94,6 @@ class newtonRaphsonFT():
         # electode potential variables for epsilon
         self.epsilon_start = startPotential/self.E0 
         self.epsilon_reverse = revPotential/self.E0 
-        #self.potentialRange = np.concatenate((np.linspace(startPotential, revPotential, numberOfMeasurements), np.linspace(revPotential,startPotential, numberOfMeasurements)), axis=None)
-        # FIXME: potentialRange needs fixing
-        self.potentialRange = np.linspace(startPotential, revPotential, numberOfMeasurements)
-        self.fullPotentialRange = np.hstack((self.potentialRange,self.potentialRange[1:]))
 
         self.deltaepislon = deltaepislon/self.E0 # V 
         self.mew  = 0.0 # phase set by solver
@@ -243,7 +238,6 @@ class newtonRaphsonFT():
                 # epsilon after dc current reversal
                 depsilon_rdt = -1.0 + self.omega*(self.deltaepislon)*math.cos(self.omega*t + self.mew) -(self.row*(i_n1 - i_n ))/self.dimlessTimeStepSize
         
-
         return(-i_n1 + (gamma0 + gamma1*self.epsilon_r + gamma2*math.pow(self.epsilon_r, 2.0 ) + gamma3*math.pow(self.epsilon_r, 3.0 ))*depsilon_rdt 
                 + self.zeta*(dtheta_X_dt - dtheta_Z_dt))
 
@@ -420,14 +414,28 @@ class wrappedNewton(pints.ForwardModel):
         self.revPotential = revPotential
         self.rateOfPotentialChange = rateOfPotentialChange
         length = times.shape
-        self.numberOfMeasurements = length[0]
-        self.half_of_measuremnts = int(self.numberOfMeasurements/2)
+        self.numberOfMeasurements = int(length[0])
+        self.half_of_measuremnts = math.ceil(self.numberOfMeasurements/2)
         self.deltaepislon = deltaepislon
         self.uncomp_resis = uncomp_resis
         self.electrode_area = electrode_area
         self.electode_coverage = electode_coverage
         self.initaldiscard = int(initaldiscard*self.half_of_measuremnts)
         self.enddiscard = int(enddiscard*self.half_of_measuremnts)
+
+        if self.numberOfMeasurements % 2.0 == 0.0:
+
+            self.potentialRange = np.linspace(startPotential, revPotential, self.numberOfMeasurements )
+            reversed_potentialRange = np.flip(self.potentialRange)
+            fullPotentialRange = np.hstack((self.potentialRange, reversed_potentialRange[1:]))
+            self.fullPotentialRange = fullPotentialRange[::2]
+
+        else:
+
+            self.potentialRange = np.linspace(startPotential, revPotential, self.half_of_measuremnts)
+            reversed_potentialRange = np.flip(self.potentialRange)
+            self.fullPotentialRange = np.hstack((self.potentialRange, reversed_potentialRange[1:]))
+
 
         # as the first time is at 0.0s we take one of the numberOfMeasurements
         # to split total time evenly and get the most accurate timeStepSize
@@ -618,19 +626,23 @@ class wrappedNewton(pints.ForwardModel):
         if exp_times is not None:
             xaxislabel = "frequency/Hz" # "potential/V"
 
-            plt.figure(figsize=(18,10))
+            plt.figure()
             plt.title("experimental FT")
             plt.ylabel("amplituide")
             plt.xlabel(xaxislabel)
-            plt.plot(freq_org, np.log10(half_full_sim),'b', label='experimental_data')
+            plt.plot(freq_org, np.log10(half_full_sim),'royalblue', label='experimental_data')
             plt.plot(freq_org[low:upper], np.log10(half_full_sim[low:upper]),'r', label='experimental_harmonic 1')
-            plt.legend(loc='best')
+            f = mtick.ScalarFormatter(useOffset=False, useMathText=True)
+            g = lambda x,pos : "${}$".format(f._formatSciNotation('%1.10e' % x))
+            plt.gca().yaxis.set_major_formatter(mtick.FuncFormatter(g))
+            plt.legend(loc='best', markerscale = 0.1, labelspacing = 0.1, handlelength = 0.5, columnspacing = 0.1, borderaxespad = 0.1, handletextpad = 0.4, borderpad = 0.2)
             plt.show()
+            plt.close('all')
 
             spacing_x = x[0][-1] +adjustment
             spacing_y = y[0][0] +adjustment
 
-            plt.figure(figsize=(18,10))
+            plt.figure()
             plt.title("experimental FT harmonic 1 and mid point (max)")
             plt.ylabel("amplituide")
             plt.xlabel(xaxislabel)
@@ -640,8 +652,34 @@ class wrappedNewton(pints.ForwardModel):
             if z[0] is not None:
                 spacing_z =z[0]
                 plt.plot(freq_org[spacing_z], np.log10(half_full_sim[spacing_z]),'cX', label='spacing_z')
-            plt.legend(loc='best')
+            f = mtick.ScalarFormatter(useOffset=False, useMathText=True)
+            g = lambda x,pos : "${}$".format(f._formatSciNotation('%1.10e' % x))
+            plt.gca().yaxis.set_major_formatter(mtick.FuncFormatter(g))
+            plt.legend(loc='best', markerscale = 0.1, labelspacing = 0.1, handlelength = 0.5, columnspacing = 0.1, borderaxespad = 0.1, handletextpad = 0.4, borderpad = 0.2)
             plt.show()
+            plt.close('all')
+
+            # plt.figure(figsize=(18,10))
+            # plt.title("experimental FT")
+            # plt.ylabel("amplituide")
+            # plt.xlabel(xaxislabel)
+            # plt.plot(freq_org, np.log10(half_full_sim),'royalblue', label='experimental_data')
+            # freq = self.frequencies_for_harmonics_4_to_12(times =exp_times)
+            # Ft_reduced_sim = self.simulate_reduced_FT_current(parameters= [4.00000000000000000e+03,  3.99999999971199850e+03,
+            #                 -3.42625240890104044e-01, -3.32825431395151972e-01,
+            #                 -1.37555866965690110e-02,  4.84787412952000452e-01], times = exp_times)
+            # plt.plot(freq, np.log10(Ft_reduced_sim),'r', label='experimental_harmonics 4- 12')
+            # plt.legend(loc='best', markerscale = 0.1, labelspacing = 0.1, handlelength = 0.5, columnspacing = 0.1, borderaxespad = 0.1, handletextpad = 0.4, borderpad = 0.2)
+            # plt.show()
+
+            # plt.figure(figsize=(18,10))
+            # plt.title("experimental FT")
+            # plt.ylabel("amplituide")
+            # plt.xlabel(xaxislabel)
+            # plt.plot(freq, np.log10(Ft_reduced_sim),'r', label='experimental_harmonics 4- 12')
+            # plt.legend(loc='best', markerscale = 0.1, labelspacing = 0.1, handlelength = 0.5, columnspacing = 0.1, borderaxespad = 0.1, handletextpad = 0.4, borderpad = 0.2)
+            # plt.show()
+
         # change as approriate
         # was orginally -1
         return int(spacing_x)
@@ -687,6 +725,7 @@ class wrappedNewton(pints.ForwardModel):
         # FIXME: issue finding location of 4th harmonic mid point
         print('\n'+'*'*10+'cacluating location of 4th harmonic'+'*'*10)
         x = np.where(freq < self.freq*4)
+        print('x: ', x[0][-1])
         mid_point_index = x[0][-1] + FourthAdjustment
         print('mid point index of 4th harmonic: ', mid_point_index)
         print('\n'+'*'*10+'index distance of ' + str(Hz_interval) + 'Hz'+'*'*10)
@@ -721,84 +760,153 @@ class wrappedNewton(pints.ForwardModel):
             
             while high <= dims[0]:
                 sim_plot = Ft_reduced_sim[low:high]
+                # kaiser_window = np.kaiser(sim_plot.shape[0], 0)
+                # array_for_iFFT = np.multiply(kaiser_window,array_for_iFFT)
+
+                # plt.figure(figsize=(18,10))
+                # plt.title("kaiser_window")
+                # plt.ylabel("?")
+                # plt.plot(kaiser_window,'r', linestyle='dashed', label='kaiser_window')
+                # plt.tick_params(
+                #                 axis='x',          # changes apply to the x-axis
+                #                 which='both',      # both major and minor ticks are affected
+                #                 bottom=False,      # ticks along the bottom edge are off
+                #                 top=False,         # ticks along the top edge are off
+                #                 labelbottom=False) 
+                # plt.legend(loc='best', markerscale = 0.1, labelspacing = 0.1, handlelength = 0.5, columnspacing = 0.1, borderaxespad = 0.1, handletextpad = 0.4, borderpad = 0.2)
+                # plt.show()
+
+                print('sim_plot.shape: ', sim_plot.shape)
+                temp =  sim_plot.shape[0]*6 # 300 # int(10*harmonic) # sim_plot.shape[0]
+                print('number added to each half of array: ', temp)
                 mid_upper_sim_plot = Ft_reduced_sim[mid:high]
+                mid_upper_sim_plot = np.hstack((mid_upper_sim_plot, np.zeros(temp)))
                 lower_sim_plot = Ft_reduced_sim[low:mid]
-                kaiser_window = np.kaiser(sim_plot.shape[0], 2)
+                lower_sim_plot = np.hstack((np.zeros(temp), lower_sim_plot))
                 
                 array_for_iFFT = np.hstack((mid_upper_sim_plot, lower_sim_plot))
-                array_for_iFFT = np.multiply(kaiser_window,array_for_iFFT)
                 sim_harmonic = np.fft.ifft(array_for_iFFT)
                 sim_harmonic = sim_harmonic*I0
 
                 sim_plot = FT_reduced_exp[low:high]
                 mid_upper_sim_plot = FT_reduced_exp[mid:high]
+                mid_upper_sim_plot = np.hstack((mid_upper_sim_plot, np.zeros(temp)))
                 lower_sim_plot = FT_reduced_exp[low:mid]
-                
+                lower_sim_plot = np.hstack((np.zeros(temp), lower_sim_plot))
                 array_for_iFFT = np.hstack((mid_upper_sim_plot, lower_sim_plot))
-                array_for_iFFT = np.multiply(kaiser_window,array_for_iFFT)
                 exp_harmonic = np.fft.ifft(array_for_iFFT)
                 exp_harmonic = exp_harmonic*I0
+
+                # cacluating times and dc potential for harmonic matrices
+                for_calc = sim_harmonic.shape[0]
+                startT = 0.0#specify in seconds
+                revT =  abs((self.revPotential - self.startPotential)/(self.rateOfPotentialChange))
+                endT = revT*2.0
+
+                if for_calc % 2.0 == 0.0:
+                    for_calc = int(for_calc)
+
+                    first_half_times = np.linspace(startT, revT, for_calc)
+                    last_half_times = np.linspace(revT, endT, for_calc)
+                    IFFT_time = np.hstack((first_half_times, last_half_times[1:]))
+                    IFFT_time = IFFT_time[::2]
+
+                    potentialRange = np.linspace(self.startPotential, self.revPotential, for_calc)
+                    reversed_potentialRange = np.flip(potentialRange)
+                    IFFT_fullPotentialRange = np.hstack((potentialRange, reversed_potentialRange[1:]))
+                    IFFT_fullPotentialRange = IFFT_fullPotentialRange[::2]
+
+                    if print_all_harmonics is True or harmonic in print_these_harmonics:
+                        output = np.vstack((IFFT_time, IFFT_fullPotentialRange))
+                        headers = ['time/s', 'potential/V']
+                        output = np.vstack((output, np.absolute(exp_harmonic)))
+                        headers.append('experimental/A')
+                        output = np.vstack((output, np.absolute(sim_harmonic)))
+                        headers.append('optimised/A')
+                        output = np.transpose(output)
+                        pd.DataFrame(output).to_csv(os.path.join(save_to, 'absolute_harmonic_'+str(harmonic)+'.txt'), header=headers, index=None, sep='\t')
+                        del(output)
+
+                else:
+                    for_calc = math.ceil(for_calc/2)
+
+                    first_half_times = np.linspace(startT, revT, for_calc)
+                    last_half_times = np.linspace(revT, endT, for_calc)
+                    IFFT_time = np.hstack((first_half_times, last_half_times[1:]))
+
+                    potentialRange = np.linspace(self.startPotential, self.revPotential, for_calc)
+                    reversed_potentialRange = np.flip(potentialRange)
+                    IFFT_fullPotentialRange = np.hstack((potentialRange, reversed_potentialRange[1:]))
+
+                    if print_all_harmonics is True or harmonic in print_these_harmonics:
+                        output = np.vstack((IFFT_time, IFFT_fullPotentialRange))
+                        headers = ['time/s', 'potential/V']
+                        output = np.vstack((output, np.absolute(exp_harmonic)))
+                        headers.append('experimental/A')
+                        output = np.vstack((output, np.absolute(sim_harmonic)))
+                        headers.append('optimised/A')
+                        output = np.transpose(output)
+                        pd.DataFrame(output).to_csv(os.path.join(save_to, 'absolute_harmonic_'+str(harmonic)+'.txt'), header=headers, index=None, sep='\t')
+                        del(output)
+
+
+
 
                 if print_simulated_harmonics_alone is True:
                 
                     if print_all_harmonics is True or harmonic in print_these_harmonics:
-                        plt.figure(figsize=(18,10))
-                        plt.title("Harmonic "+ str(harmonic))
-                        plt.ylabel("current/Amps")
-                        plt.plot(sim_harmonic.real,'r', label='Real Simulated Harmonic '+str(harmonic))
-                        plt.plot(sim_harmonic.imag,'r', linestyle='dashed', label='Imaginary Simulated Harmonic '+str(harmonic))
-                        plt.tick_params(
-                                        axis='x',          # changes apply to the x-axis
-                                        which='both',      # both major and minor ticks are affected
-                                        bottom=False,      # ticks along the bottom edge are off
-                                        top=False,         # ticks along the top edge are off
-                                        labelbottom=False) 
-                        plt.legend(loc='best')
+                        plt.figure()
+                        plt.title("Simulated Harmonic "+ str(harmonic))
+                        plt.ylabel("Current/Dimensionless")
+                        plt.plot(IFFT_time, sim_harmonic.real,'r', label='Real')
+                        plt.plot(IFFT_time, sim_harmonic.imag,'r', linestyle='dashed', label='Imaginary')
+                        f = mtick.ScalarFormatter(useOffset=False, useMathText=True)
+                        g = lambda x,pos : "${}$".format(f._formatSciNotation('%1.10e' % x))
+                        plt.gca().yaxis.set_major_formatter(mtick.FuncFormatter(g))
+                        plt.legend(loc='best', markerscale = 0.1, labelspacing = 0.1, handlelength = 0.5, columnspacing = 0.1, borderaxespad = 0.1, handletextpad = 0.4, borderpad = 0.2)
                         if save_to is not None:
-                             plt.savefig(os.path.join(save_to, 'Just_simulated_harmonic_' + str(harmonic)+'.pdf'))
-                        plt.show()
+                             plt.savefig(os.path.join(save_to, 'Just_simulated_harmonic_' + str(harmonic)+'.png'), transparent=True, bbox_inches='tight')
+                        # plt.show()
+                        plt.close('all')
 
                 if print_all_harmonics is True or harmonic in print_these_harmonics:
 
-                    plt.figure(figsize=(18,10))
-                    plt.title("Simulated on Experimental Harmonic "+ str(harmonic))
-                    plt.ylabel("current/Amps")
-                    plt.plot(exp_harmonic.real,'b', label='Real Experimental Harmonic '+str(harmonic))
-                    plt.plot(sim_harmonic.real,'r', label='Real Simulated Harmonic '+str(harmonic))
-                    plt.plot(exp_harmonic.imag,'b', linestyle='dashed', label='Imaginary Experimental Harmonic '+str(harmonic))
-                    plt.plot(sim_harmonic.imag,'r', linestyle='dashed', label='Imaginary Simulated Harmonic '+str(harmonic))
-                    plt.tick_params(
-                                    axis='x',          # changes apply to the x-axis
-                                    which='both',      # both major and minor ticks are affected
-                                    bottom=False,      # ticks along the bottom edge are off
-                                    top=False,         # ticks along the top edge are off
-                                    labelbottom=False) 
-                    plt.legend(loc='best')
+                    plt.figure()
+                    plt.title("Harmonic "+ str(harmonic))
+                    plt.ylabel("Current/Dimensionless")
+                    plt.plot(IFFT_time, exp_harmonic.real,'royalblue', label='Real Exp')
+                    plt.plot(IFFT_time, sim_harmonic.real,'r', label='Real Best Fit')
+                    plt.plot(IFFT_time, exp_harmonic.imag,'royalblue', linestyle='dashed', label='Imaginary Exp')
+                    plt.plot(IFFT_time, sim_harmonic.imag,'r', linestyle='dashed', label='Imaginary Best Fit')
+                    f = mtick.ScalarFormatter(useOffset=False, useMathText=True)
+                    g = lambda x,pos : "${}$".format(f._formatSciNotation('%1.10e' % x))
+                    plt.gca().yaxis.set_major_formatter(mtick.FuncFormatter(g))
+                    plt.legend(loc='best', markerscale = 0.1, labelspacing = 0.1, handlelength = 0.5, columnspacing = 0.1, borderaxespad = 0.1, handletextpad = 0.4, borderpad = 0.2)
                     if save_to is not None:
-                             plt.savefig(os.path.join(save_to, 'Simulated_on_experimental_harmonic '+str(harmonic)+'.pdf'))
-                    plt.show()
+                             plt.savefig(os.path.join(save_to, 'Simulated_on_experimental_harmonic_'+str(harmonic)+'.png'), transparent=True, bbox_inches='tight')
+                    # plt.show()
+                    plt.close('all')
 
-                    plt.figure(figsize=(18,10))
-                    plt.title("Simulated on Experimental Harmonic "+ str(harmonic))
-                    plt.ylabel("current/Amps")
-                    plt.plot(np.absolute(exp_harmonic),'b', label='Absolute Experimental Harmonic '+str(harmonic))
-                    plt.plot(np.absolute(sim_harmonic),'r', label='Absolute Simulated Harmonic '+str(harmonic))
-                    plt.legend(loc='best')
-                    plt.tick_params(
-                                        axis='x',          # changes apply to the x-axis
-                                        which='both',      # both major and minor ticks are affected
-                                        bottom=False,      # ticks along the bottom edge are off
-                                        top=False,         # ticks along the top edge are off
-                                        labelbottom=False) 
+                    plt.figure()
+                    plt.title("Absolute Harmonic "+ str(harmonic))
+                    plt.ylabel("Current/Dimensionless")
+                    plt.plot(IFFT_time, np.absolute(exp_harmonic),'royalblue', label='Exp')
+                    plt.plot(IFFT_time, np.absolute(sim_harmonic),'r', linestyle='dashdot', label='Best Fit')
+                    plt.legend(loc='best', markerscale = 0.1, labelspacing = 0.1, handlelength = 0.5, columnspacing = 0.1, borderaxespad = 0.1, handletextpad = 0.4, borderpad = 0.2)
+                    f = mtick.ScalarFormatter(useOffset=False, useMathText=True)
+                    g = lambda x,pos : "${}$".format(f._formatSciNotation('%1.10e' % x))
+                    plt.gca().yaxis.set_major_formatter(mtick.FuncFormatter(g))
                     if save_to is not None:
-                             plt.savefig(os.path.join(save_to, 'Absolute_simulated_on_experimental_harmonic '+str(harmonic)+'.pdf'))
-                    plt.show()
+                             plt.savefig(os.path.join(save_to, 'Absolute_simulated_on_experimental_harmonic_'+str(harmonic)+'.png'), transparent=True, bbox_inches='tight')
+                    # plt.show()
+                    plt.close('all')
 
 
                 high = high+spacing
                 low = low+spacing
                 mid = mid+spacing
                 harmonic = harmonic +1
+    
     
 
     def _ploting_FT_haromics(self, mid_point_index, index_window, spacing, freq, Ft_reduced_sim, FT_reduced_exp,
@@ -828,7 +936,7 @@ class wrappedNewton(pints.ForwardModel):
             lower_exp_plot = FT_reduced_exp[low:mid]
 
             if print_all_harmonics is True or harmonic in print_these_harmonics:
-                plt.figure(figsize=(18,10))
+                plt.figure()
                 plt.title("simulation FT")
                 plt.ylabel("amplituide")
                 plt.xlabel(xaxislabel)
@@ -841,11 +949,14 @@ class wrappedNewton(pints.ForwardModel):
                                 which='both',      # both major and minor ticks are affected
                                 bottom=False,      # ticks along the bottom edge are off
                                 top=False,         # ticks along the top edge are off
-                                labelbottom=False) 
-                plt.legend(loc='best')
+                                labelbottom=False)
+                f = mtick.ScalarFormatter(useOffset=False, useMathText=True)
+                g = lambda x,pos : "${}$".format(f._formatSciNotation('%1.10e' % x))
+                plt.gca().yaxis.set_major_formatter(mtick.FuncFormatter(g))
+                plt.legend(loc='best', markerscale = 0.1, labelspacing = 0.1, handlelength = 0.5, columnspacing = 0.1, borderaxespad = 0.1, handletextpad = 0.4, borderpad = 0.2)
                 plt.show()
 
-                plt.figure(figsize=(18,10))
+                plt.figure()
                 plt.title("experimental FT")
                 plt.ylabel("amplituide")
                 plt.xlabel(xaxislabel)
@@ -858,23 +969,29 @@ class wrappedNewton(pints.ForwardModel):
                                 which='both',      # both major and minor ticks are affected
                                 bottom=False,      # ticks along the bottom edge are off
                                 top=False,         # ticks along the top edge are off
-                                labelbottom=False) 
-                plt.legend(loc='best')
+                                labelbottom=False)
+                f = mtick.ScalarFormatter(useOffset=False, useMathText=True)
+                g = lambda x,pos : "${}$".format(f._formatSciNotation('%1.10e' % x))
+                plt.gca().yaxis.set_major_formatter(mtick.FuncFormatter(g))
+                plt.legend(loc='best', markerscale = 0.1, labelspacing = 0.1, handlelength = 0.5, columnspacing = 0.1, borderaxespad = 0.1, handletextpad = 0.4, borderpad = 0.2)
                 plt.show()
 
-                plt.figure(figsize=(18,10))
+                plt.figure()
                 plt.title("simulation and experimental FT")
                 plt.ylabel("amplituide")
                 plt.xlabel(xaxislabel)
-                plt.plot(freq, np.log10(FT_reduced_exp),'b', label='experimental_data')
+                plt.plot(freq, np.log10(FT_reduced_exp),'royalblue', label='experimental_data')
                 plt.plot(xaxis, np.log10(sim_plot),'r', label='simulated_harmonic_'+str(harmonic))
                 plt.tick_params(
                                 axis='x',          # changes apply to the x-axis
                                 which='both',      # both major and minor ticks are affected
                                 bottom=False,      # ticks along the bottom edge are off
                                 top=False,         # ticks along the top edge are off
-                                labelbottom=False) 
-                plt.legend(loc='best')
+                                labelbottom=False)
+                f = mtick.ScalarFormatter(useOffset=False, useMathText=True)
+                g = lambda x,pos : "${}$".format(f._formatSciNotation('%1.10e' % x))
+                plt.gca().yaxis.set_major_formatter(mtick.FuncFormatter(g))
+                plt.legend(loc='best', markerscale = 0.1, labelspacing = 0.1, handlelength = 0.5, columnspacing = 0.1, borderaxespad = 0.1, handletextpad = 0.4, borderpad = 0.2)
                 plt.show()
 
 
