@@ -143,3 +143,6 @@ Data/processed/old_current
 
 # ignoring processed data to save memory
 experimental
+
+*.txt
+*.csv
